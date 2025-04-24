@@ -10,7 +10,6 @@ plugins {
 }
 
 group = "org.octopusden.octopus"
-version = "1.0-SNAPSHOT"
 description = "Octopus module for OC template gradle plugin"
 
 repositories {
@@ -71,25 +70,25 @@ nexusPublishing {
 
 publishing {
     publications {
-        withType<MavenPublication> {
+        create<MavenPublication>("maven") {
             pom {
-                name = project.name
-                description = "Octopus module for OC template service plugin"
+                name.set(project.name)
+                description.set(project.description)
                 url = "https://github.com/octopusden/octopus-oc-template-gradle-plugin.git"
                 licenses {
                     license {
-                        name = "The Apache License, Version 2.0"
-                        url = "http://www.apache.org/licenses/LICENSE-2.0.txt"
+                        name.set("The Apache License, Version 2.0")
+                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
                     }
                 }
                 scm {
-                    url = "https://github.com/octopusden/octopus-oc-template-gradle-plugin.git"
-                    connection = "scm:git://github.com/octopusden/octopus-oc-template-gradle-plugin.git"
+                    url.set("https://github.com/octopusden/octopus-oc-template-gradle-plugin.git")
+                    connection.set("scm:git://github.com/octopusden/octopus-oc-template-gradle-plugin.git")
                 }
                 developers {
                     developer {
-                        id = "octopus"
-                        name = "octopus"
+                        id.set("octopus")
+                        name.set("octopus")
                     }
                 }
             }
@@ -98,17 +97,12 @@ publishing {
 }
 
 signing {
-    val signingKey = project.findProperty("signingKey") as String?
-    val signingPassword = project.findProperty("signingPassword") as String?
-
-    isRequired = System.getenv().containsKey("ORG_GRADLE_PROJECT_signingKey") &&
-            System.getenv().containsKey("ORG_GRADLE_PROJECT_signingPassword")
-
-    if (signingKey != null && signingPassword != null) {
-        useInMemoryPgpKeys(signingKey, signingPassword)
-    }
-
-    sign(publishing.publications)
+    isRequired = System.getenv().containsKey("ORG_GRADLE_PROJECT_signingKey") && System.getenv()
+        .containsKey("ORG_GRADLE_PROJECT_signingPassword")
+    val signingKey: String? by project
+    val signingPassword: String? by project
+    useInMemoryPgpKeys(signingKey, signingPassword)
+    sign(publishing.publications["maven"])
 }
 
 project.tasks.findByPath("publish")?.dependsOn(":artifactoryPublish")
