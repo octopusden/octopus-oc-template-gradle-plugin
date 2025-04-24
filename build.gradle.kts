@@ -45,7 +45,7 @@ artifactory {
         repository {
             repoKey = System.getenv().getOrDefault("ARTIFACTORY_REPOSITORY_KEY", project.properties["artifactoryRepositoryKey"]).toString()
             username = System.getenv().getOrDefault("ARTIFACTORY_DEPLOYER_USERNAME", project.properties["NEXUS_USER"]).toString()
-            repoKey = System.getenv().getOrDefault("ARTIFACTORY_DEPLOYER_PASSWORD", project.properties["NEXUS_PASSWORD"]).toString()
+            password = System.getenv().getOrDefault("ARTIFACTORY_DEPLOYER_PASSWORD", project.properties["NEXUS_PASSWORD"]).toString()
         }
         defaults {
             publications("ALL_PUBLICATIONS")
