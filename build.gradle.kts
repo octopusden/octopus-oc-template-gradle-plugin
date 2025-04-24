@@ -11,6 +11,7 @@ plugins {
 
 group = "org.octopusden.octopus"
 version = "1.0-SNAPSHOT"
+description = "Octopus module for OC template gradle plugin"
 
 repositories {
     mavenCentral()
@@ -27,7 +28,7 @@ kotlin {
 
 gradlePlugin {
     plugins {
-        create("ocTemplateGradlePlugin") {
+        create("OcTemplateGradlePlugin") {
             id = "org.octopusden.octopus.oc-template"
             displayName = "octopus-oc-template-gradle-plugin"
             description = "OC Template Gradle Plugin"
@@ -73,7 +74,7 @@ publishing {
         withType<MavenPublication> {
             pom {
                 name = project.name
-                description = "Octopus module for oc template service plugin"
+                description = "Octopus module for OC template service plugin"
                 url = "https://github.com/octopusden/octopus-oc-template-gradle-plugin.git"
                 licenses {
                     license {
