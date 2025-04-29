@@ -16,6 +16,7 @@ open class TestGradleDSL {
     lateinit var testProjectName: String
     lateinit var templateYamlFileName: String
     var additionalArguments: Array<String> = arrayOf()
+    var additionalEnvVariables: Map<String, String> = mapOf()
     var tasks: Array<String> = arrayOf()
 }
 
@@ -24,7 +25,6 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
     init.invoke(testGradleDSL)
 
     val ocTemplateGradlePluginVersion = System.getenv().getOrDefault("OC_TEMPLATE_GRADLE_PLUGIN_VERSION", "1.0-SNAPSHOT")
-    val okdProject = System.getenv().getOrDefault("OKD_PROJECT", "test-env")
     val templateYamlPath = getResourcePath("/${testGradleDSL.templateYamlFileName}", "Template YAML file")
 
     val projectPath = getResourcePath("/${testGradleDSL.testProjectName}", "Test project")
@@ -34,7 +34,7 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
 
     return Pair(ProcessBuilders
         .newProcessBuilder<ProcessBuilder>(LocalProcessSpec.LOCAL_COMMAND)
-        .envVariables(mapOf("JAVA_HOME" to System.getProperties().getProperty("java.home")))
+        .envVariables(mapOf("JAVA_HOME" to System.getProperties().getProperty("java.home")) + testGradleDSL.additionalEnvVariables)
         .logger { it.logger(LOGGER) }
         .defaultExtensionMapping()
         .workDirectory(projectPath)
@@ -44,7 +44,6 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
         .execute(
             *(listOf(
                 "-Poctopus-oc-template.version=$ocTemplateGradlePluginVersion",
-                "-Pokd-project=$okdProject",
                 "-Pyaml-template-file=$templateYamlPath"
             ) + testGradleDSL.tasks + testGradleDSL.additionalArguments).toTypedArray())
         .toCompletableFuture()

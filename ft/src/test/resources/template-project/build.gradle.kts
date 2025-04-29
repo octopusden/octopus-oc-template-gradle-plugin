@@ -6,11 +6,13 @@ plugins {
 val yamlTemplateFile = project.findProperty("yaml-template-file") as? String ?: ""
 val workDirectoryPath = project.findProperty("work-directory") as? String ?: ""
 
-val okdProject = project.findProperty("okd-project") as? String ?: ""
+val okdNamespace = project.findProperty("okd-namespace") as String?
 val podName = project.findProperty("okd-pod-name") as? String ?: ""
 
 val testService = ocTemplateService.register("testService") {
-    namespace = okdProject
+    if (okdNamespace != null) {
+        namespace = okdNamespace
+    }
     templateFile = file(yamlTemplateFile)
     templateParameters.put("POD_NAME", podName)
     workDirectory.set(layout.buildDirectory.dir(workDirectoryPath))

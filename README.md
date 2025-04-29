@@ -18,8 +18,8 @@ plugins {
 ```
 #### Register a Template Service
 ```kotlin
-val testService = ocTemplateService.register("testService") {
-   namespace = "your-okd-namespace"             // Target OKD project namespace
+val testService = ocTemplateService.register("testService") { 
+   namespace = "your-okd-namespace"             // (Optional) Target namespace; defaults to `OKD_NAMESPACE` env variable.
    templateFile = file("path/to/template.yaml") // Template file path
    templateParameters.put("KEY", "value")       // Parameters for the template
    workDirectory.set(layout.buildDirectory.dir("work-directory"))

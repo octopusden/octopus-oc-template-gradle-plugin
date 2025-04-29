@@ -12,8 +12,8 @@ class OcTemplatePluginTest {
         const val DEFAULT_TEMPLATE_YAML_FILE = "template-test.yaml"
         const val DEFAULT_POD_NAME = "test-pod"
         const val DEFAULT_WORK_DIR = "okd"
-
-        val DEFAULT_TASKS = arrayOf("clean", "build", "--info")
+        val DEFAULT_TASKS = arrayOf("clean", "build", "--info", "--stacktrace")
+        val DEFAULT_OKD_NAMESPACE: String = System.getenv().getOrDefault("OKD_NAMESPACE", "test-env")
     }
 
     @Test
@@ -23,9 +23,27 @@ class OcTemplatePluginTest {
             templateYamlFileName = DEFAULT_TEMPLATE_YAML_FILE
             tasks = DEFAULT_TASKS
             additionalArguments = arrayOf(
+                "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
                 "-Pokd-pod-name=$DEFAULT_POD_NAME",
                 "-Pwork-directory=$DEFAULT_WORK_DIR"
             )
+        }
+        assertEquals(0, instance.exitCode)
+        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/$DEFAULT_TEMPLATE_YAML_FILE"))
+        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/logs/$DEFAULT_POD_NAME.log"))
+    }
+
+    @Test
+    fun testProjectWithEnvNamespace() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = DEFAULT_TEST_PROJECT_NAME
+            templateYamlFileName = DEFAULT_TEMPLATE_YAML_FILE
+            tasks = DEFAULT_TASKS
+            additionalArguments = arrayOf(
+                "-Pokd-pod-name=$DEFAULT_POD_NAME",
+                "-Pwork-directory=$DEFAULT_WORK_DIR"
+            )
+            additionalEnvVariables = mapOf("OKD_NAMESPACE" to DEFAULT_OKD_NAMESPACE)
         }
         assertEquals(0, instance.exitCode)
         assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/$DEFAULT_TEMPLATE_YAML_FILE"))
@@ -39,6 +57,7 @@ class OcTemplatePluginTest {
             templateYamlFileName = DEFAULT_TEMPLATE_YAML_FILE
             tasks = DEFAULT_TASKS
             additionalArguments = arrayOf(
+                "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
                 "-Pwork-directory=$DEFAULT_WORK_DIR"
             )
         }
@@ -49,14 +68,14 @@ class OcTemplatePluginTest {
     }
 
     @Test
-    fun testInvalidOKDProjectNamespace() {
+    fun testInvalidOKDNamespace() {
         val (instance, _) = gradleProcessInstance {
             testProjectName = DEFAULT_TEST_PROJECT_NAME
             templateYamlFileName = DEFAULT_TEMPLATE_YAML_FILE
             tasks = DEFAULT_TASKS
             additionalArguments = arrayOf(
                 "-Pokd-pod-name=$DEFAULT_POD_NAME",
-                "-Pokd-project=invalid-namespace",
+                "-Pokd-namespace=invalid-namespace",
                 "-Pwork-directory=$DEFAULT_WORK_DIR"
             )
         }

@@ -17,13 +17,17 @@ abstract class OcTemplateService @Inject constructor(
     private val execOperations: ExecOperations
 ) : BuildService<OcTemplateService.Parameters>, AutoCloseable {
     interface Parameters : BuildServiceParameters {
-        val namespace: Property<String>
+        val namespace: Property<String?>
         val templateFile: RegularFileProperty
         val templateParameters: MapProperty<String, String>
         val workDirectory: DirectoryProperty
     }
 
-    private val namespace: String = parameters.namespace.get()
+    private val namespace: String by lazy {
+        parameters.namespace.orNull
+            ?: System.getenv("OKD_NAMESPACE")
+            ?: throw IllegalArgumentException("OKD namespace is not provided")
+    }
     private val resources: File
     private val logs: Directory
 
