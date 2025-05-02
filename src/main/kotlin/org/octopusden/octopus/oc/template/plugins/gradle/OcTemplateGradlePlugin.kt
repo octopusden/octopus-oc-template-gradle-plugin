@@ -7,7 +7,7 @@ class OcTemplateGradlePlugin: Plugin<Project> {
     override fun apply(project: Project) {
         val extension = project.extensions.create(
             "ocTemplate",
-            OcGlobalSettings::class.java,
+            OcTemplateSettings::class.java,
             project
         )
 

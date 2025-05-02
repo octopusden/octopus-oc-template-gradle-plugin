@@ -23,7 +23,6 @@ ocTemplate {
     workDirectory.set(layout.buildDirectory.dir("oc-work"))  // Default work directory
     
     // Optional fields
-    pods.set(listOf("pod1", pod2)) // Pods created from template (for logs info)
     period.set(1200L)  // Period checking resource readiness
     attempts.set(20)   // Attempts checking resource readiness
 

@@ -1,15 +1,22 @@
 package org.octopusden.octopus.oc.template.plugins.gradle
 
 import org.gradle.api.Project
+import org.gradle.api.Task
 import org.gradle.api.file.Directory
+import org.gradle.api.tasks.TaskProvider
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.*
 import java.io.File
 
 class OcTaskConfigurations(
-    private val settings: OcGlobalSettings,
+    private val settings: OcTemplateSettings,
     private val project: Project
 ) {
-    fun registerTasks() {
+    private val ocTemplateCreateTask: TaskProvider<Task> = project.tasks.register("ocTemplateCreate") {
+        it.group = "oc-template"
+        it.description = "Create all OpenShift resources for registered services"
+    }
+
+    init {
         settings.services.all { service ->
             val serviceName = service.name
             val templateFile = service.templateFile.get().asFile
@@ -45,7 +52,7 @@ class OcTaskConfigurations(
 
             project.tasks.register("ocTemplateLogs$serviceName", OcLogsTask::class.java) {
                 it.namespace.set(settings.namespace)
-                it.pods.set(settings.pods)
+                it.pods.set(service.pods)
                 it.logs.set(logs)
             }
 
@@ -54,6 +61,19 @@ class OcTaskConfigurations(
                 it.resources.set(resources)
             }
 
+            val createTask = project.tasks.named("ocTemplateCreate$serviceName")
+            val deleteTask = project.tasks.named("ocTemplateDelete$serviceName")
+            ocTemplateCreateTask.configure {
+                it.dependsOn(createTask)
+            }
         }
+    }
+
+    fun registerTasks() {
+
+    }
+
+    fun isRequiredByCore(task: Task) {
+        task.finalizedBy(ocTemplateCreateTask)
     }
 }
