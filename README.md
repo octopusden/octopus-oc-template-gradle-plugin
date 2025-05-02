@@ -1,12 +1,12 @@
 # octopus-oc-template-gradle-plugin
 This Gradle plugin provides a convenient way to interact with OKD/OpenShift templates in your build process. It wraps common oc CLI commands into easily callable Gradle tasks.
 
-### Features
-- Initialize and process OpenShift templates with parameters
-- Create resources from templates
-- Wait for pods to be ready
-- Fetch logs from pods
-- Clean up by deleting the created resources
+### Tasks
+- `ocTemplateProcess` initialize and process OpenShift templates with parameters
+- `ocTemplateCreate` create resources from templates
+- `ocTemplateWaitReadiness` wait for pods to be ready
+- `ocTemplateLogs` fetch logs from pods
+- `ocTemplateDelete` clean up by deleting the created resources
 
 ### Usage
 #### Apply the Plugin
@@ -18,23 +18,35 @@ plugins {
 ```
 #### Register a Template Service
 ```kotlin
-val testService = ocTemplateService.register("testService") { 
-   namespace = "your-okd-namespace"             // (Optional) Target namespace; defaults to `OKD_NAMESPACE` env variable.
-   templateFile = file("path/to/template.yaml") // Template file path
-   templateParameters.put("KEY", "value")       // Parameters for the template
-   workDirectory.set(layout.buildDirectory.dir("work-directory"))
+ocTemplate {
+    namespace.set("default-namespace")  // Default namespace for all services
+    workDirectory.set(layout.buildDirectory.dir("oc-work"))  // Default work directory
+    
+    // Optional fields
+    pods.set(listOf("pod1", pod2)) // Pods created from template (for logs info)
+    period.set(1200L)  // Period checking resource readiness
+    attempts.set(20)   // Attempts checking resource readiness
+
+    services {
+        register("database") {
+            templateFile.set(file("templates/database-template.yaml"))
+            podNames.set(listOf("pod1", "pod2")) // Pods created from the template
+            parameters.set(mapOf(
+                "DATABASE_NAME" to "mydb",
+                "DATABASE_USER" to "user"
+            ))
+        }
+
+        register("backend") {
+            templateFile.set(file("templates/backend-template.yaml"))
+            dependsOn("database")  // Declare dependency on another service
+        }
+    }
 }
 ```
 
 #### Use in Tasks
-You can trigger the OpenShift actions in your tasks:
+You can depends the OpenShift actions in your tasks:
 ```kotlin
-tasks.named("build") {
-   doLast {
-      testService.get().create()               // Create resources
-      testService.get().waitPodsForReady()     // Wait for pods to be ready
-      testService.get().logs("your-pod-name")  // Print logs
-      testService.get().delete()               // Clean up
-   }
-}
+ocTemplate.isRequiredBy(test)
 ```

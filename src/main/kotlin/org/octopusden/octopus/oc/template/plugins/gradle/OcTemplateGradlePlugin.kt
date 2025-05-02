@@ -5,6 +5,15 @@ import org.gradle.api.Project
 
 class OcTemplateGradlePlugin: Plugin<Project> {
     override fun apply(project: Project) {
-        project.extensions.create("ocTemplateService", OcTemplateServiceRegistry::class.java, project)
+        val extension = project.extensions.create(
+            "ocTemplate",
+            OcGlobalSettings::class.java,
+            project
+        )
+
+        project.afterEvaluate {
+            val configurator = OcTaskConfigurations(extension, project)
+            configurator.registerTasks()
+        }
     }
 }
