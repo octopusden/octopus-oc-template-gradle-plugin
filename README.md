@@ -17,18 +17,18 @@ plugins {
 }
 ```
 
-#### Register a Template Service
+#### Basic Usage
 ```kotlin
 ocTemplate {
-    namespace.set("default-namespace")  // Default namespace for all services
-    workDirectory.set(layout.buildDirectory.dir("oc-work"))  // Default work directory
+    namespace.set("default-namespace") // Default namespace for all services
+    workDirectory.set(layout.buildDirectory.dir("oc-work")) // Directory for processed resources and logs
 
-    enabled.set(true)
-    isRequiredBy("test")
-    
-    // Optional fields
-    period.set(1200L)  // Period checking resource readiness
-    attempts.set(20)   // Attempts checking resource readiness
+    enabled.set(true) // Default to true (creating all ocTemplate tasks, e.g., ocTemplateProcess, ocTemplateCreate)
+    isRequiredBy("test") // Ensure all declared services are prepared before running the "test" task
+
+    // Optional readiness check settings
+    period.set(1200L)  // Delay (ms) between pod readiness checks
+    attempts.set(20)   // Max number of readiness check attempts
 
     service("database") {
         templateFile.set(file("templates/database-template.yaml"))
@@ -40,28 +40,30 @@ ocTemplate {
 
     service("backend") {
         templateFile.set(file("templates/backend-template.yaml"))
-        dependsOn("database")  // Declare dependency on another service
+        podNames.set("backend-pod")  // Explicitly define pod name(s) created from template
+        dependsOn("database")  // Service dependency
     }
 }
 ```
 
+#### Advance Usage
 ```kotlin
 ocTemplate {
-    namespace.set("default-namespace")  // Default namespace for all services
-    workDirectory.set(layout.buildDirectory.dir("oc-work"))  // Default work directory
+    namespace.set("default-namespace") 
+    workDirectory.set(layout.buildDirectory.dir("oc-work"))
 
     isRequiredBy("test")
-    
-    // Optional fields
-    period.set(1200L)  // Period checking resource readiness
-    attempts.set(20)   // Attempts checking resource readiness
 
     val testProfile = project.findProperty("testProfile") as String? ?: "bitbucket"
 
+    // Group of services configuration
+    // All parameters from ocTemplate can be overridden on group nested service configurations
     giteaServices {
+        // If enabled, ocTemplate tasks for giteaServices will be registered 
+        // e.g, ocTemplateProcessGiteaServices, ocTemplateCreateGiteaServices
         enabled.set(testProfile == "gitea")
 
-        // Override default settings
+        // Override global settings within this group
         namespace.set("gitea-namespace")
         period.set(2400L)
         attempts.set(50)
@@ -69,10 +71,13 @@ ocTemplate {
         service("gitea") {
             templateFile.set(file("templates/gitea-template.yaml"))
         }
+        
         service("opensearch") {
             templateFile.set(file("templates/opensearch-template.yaml"))
-            namespace.set("opensearch-namespace")
             dependsOn("gitea")
+            
+            // All parameters from ocTemplate/giteaServices can be overridden on service configuration
+            namespace.set("opensearch-namespace")
         }
     }
     
@@ -93,10 +98,4 @@ ocTemplate {
         }
     }
 }
-```
-
-#### Use in Tasks
-You can depends the OpenShift actions in your tasks:
-```kotlin
-ocTemplate.isRequiredBy(test)
 ```
