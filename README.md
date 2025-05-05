@@ -32,7 +32,6 @@ ocTemplate {
 
     service("database") {
         templateFile.set(file("templates/database-template.yaml"))
-        podNames.set(listOf("pod1", "pod2")) // Pods created from the template
         parameters.set(mapOf(
             "DATABASE_NAME" to "mydb",
             "DATABASE_USER" to "user"
@@ -73,6 +72,7 @@ ocTemplate {
         service("opensearch") {
             templateFile.set(file("templates/opensearch-template.yaml"))
             namespace.set("opensearch-namespace")
+            dependsOn("gitea")
         }
     }
     
@@ -86,7 +86,6 @@ ocTemplate {
     
     service("vcs-facade") {
         templateFile.set(file("templates/vcs-facade-template.yaml"))
-        podNames.set("vcs-facade")
         if (testProfile == "bitbucket") {
             dependsOn("bitbucket")
         } else {
