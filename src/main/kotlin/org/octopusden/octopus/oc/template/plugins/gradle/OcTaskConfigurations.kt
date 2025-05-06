@@ -11,69 +11,7 @@ class OcTaskConfigurations(
     private val settings: OcTemplateSettings,
     private val project: Project
 ) {
-    private val ocTemplateCreateTask: TaskProvider<Task> = project.tasks.register("ocTemplateCreate") {
-        it.group = "oc-template"
-        it.description = "Create all OpenShift resources for registered services"
-    }
-
-    init {
-        settings.services.all { service ->
-            val serviceName = service.name
-            val templateFile = service.templateFile.get().asFile
-            val resources: File
-            val logs: Directory
-
-            with(settings.workDir.get()) {
-                asFile.mkdirs()
-                resources = file("${templateFile.nameWithoutExtension}.yaml").asFile
-                logs = dir("logs").also {
-                    it.asFile.mkdir()
-                }
-            }
-
-            project.tasks.register("ocTemplateProcess$serviceName", OcProcessTask::class.java) {
-                it.namespace.set(settings.namespace)
-                it.resources.set(resources)
-                it.templateFile.set(templateFile)
-                it.parameters.set(service.parameters)
-            }
-
-            project.tasks.register("ocTemplateCreate$serviceName", OcCreateTask::class.java) {
-                it.namespace.set(settings.namespace)
-                it.resources.set(resources)
-            }
-
-            project.tasks.register("ocTemplateWaitReadiness$serviceName", OcWaitReadinessTask::class.java) {
-                it.namespace.set(settings.namespace)
-                it.resources.set(resources)
-                it.period.set(settings.period)
-                it.attempts.set(settings.attempts)
-            }
-
-            project.tasks.register("ocTemplateLogs$serviceName", OcLogsTask::class.java) {
-                it.namespace.set(settings.namespace)
-                it.pods.set(service.pods)
-                it.logs.set(logs)
-            }
-
-            project.tasks.register("ocTemplateDelete$serviceName", OcDeleteTask::class.java) {
-                it.namespace.set(settings.namespace)
-                it.resources.set(resources)
-            }
-
-            val createTask = project.tasks.named("ocTemplateCreate$serviceName")
-            val deleteTask = project.tasks.named("ocTemplateDelete$serviceName")
-            ocTemplateCreateTask.configure {
-                it.dependsOn(createTask)
-            }
-        }
-    }
-
-    fun registerTasks() {
-
-    }
-
-    fun isRequiredByCore(task: Task) {
-        task.finalizedBy(ocTemplateCreateTask)
+    fun newOcTemplateSettings(name: String, nestedName: String): OcTemplateSettings {
+        return project.objects.newInstance(OcTemplateSettings::class.java, project, name, nestedName)
     }
 }

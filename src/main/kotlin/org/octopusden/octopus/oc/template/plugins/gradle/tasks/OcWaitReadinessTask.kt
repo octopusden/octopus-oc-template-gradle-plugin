@@ -13,7 +13,7 @@ import javax.inject.Inject
 
 abstract class OcWaitReadinessTask @Inject constructor(
     private val execOperations: ExecOperations,
-    private val objects:ObjectFactory
+    objects: ObjectFactory
 ): DefaultTask() {
 
     @get:Internal
@@ -34,7 +34,7 @@ abstract class OcWaitReadinessTask @Inject constructor(
     }
 
     @TaskAction
-    fun action() {
+    fun waitReadiness() {
         var ready = false
         var counter = 0
         var output: OutputStream

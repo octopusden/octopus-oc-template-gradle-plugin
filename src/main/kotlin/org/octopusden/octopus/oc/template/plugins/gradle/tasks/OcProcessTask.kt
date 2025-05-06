@@ -31,7 +31,7 @@ abstract class OcProcessTask @Inject constructor(
     }
 
     @TaskAction
-    fun create() {
+    fun process() {
         execOperations.exec {
             it.setCommandLine(
                 "oc", "process", "--local", "-o", "yaml",
