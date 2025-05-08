@@ -1,7 +1,7 @@
 import java.time.Duration
 
 plugins {
-    kotlin("jvm")
+    groovy
     `java-gradle-plugin`
     `maven-publish`
     signing
@@ -19,10 +19,6 @@ repositories {
 
 dependencies {
     implementation(gradleApi())
-}
-
-kotlin {
-    jvmToolchain(11)
 }
 
 gradlePlugin {
