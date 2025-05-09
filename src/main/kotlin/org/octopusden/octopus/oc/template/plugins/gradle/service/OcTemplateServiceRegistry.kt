@@ -1,0 +1,41 @@
+package org.octopusden.octopus.oc.template.plugins.gradle.service
+
+import org.gradle.api.GradleException
+import org.gradle.api.Project
+import org.gradle.api.provider.Provider
+import org.octopusden.octopus.oc.template.plugins.gradle.service.dto.OcTemplateServiceParametersDTO
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import javax.inject.Inject
+
+open class OcTemplateServiceRegistry @Inject constructor (
+    private val project: Project
+) {
+    private val services = mutableMapOf<String, Provider<OcTemplateService>>()
+    private val logger: Logger = LoggerFactory.getLogger(OcTemplateServiceRegistry::class.java)
+
+    fun register(name: String, config: OcTemplateServiceParametersDTO): Provider<OcTemplateService> {
+        val serviceName = "ocTemplateService_$name"
+        val existing = project.gradle.sharedServices.registrations.findByName(serviceName)
+
+        if (existing == null) logger.info("Register ocTemplateService: $serviceName")
+
+        return services.getOrPut(name) {
+            project.gradle.sharedServices.registerIfAbsent(serviceName, OcTemplateService::class.java) {
+                with(it.parameters) {
+                    namespace.set(config.namespace)
+                    workDir.set(config.workDir)
+                    templateFile.set(config.templateFile)
+                    templateParameters.set(config.templateParameters)
+                    attempts.set(config.attempts)
+                    period.set(config.period)
+                    podResources.set(config.podResources)
+                }
+            }
+        }
+    }
+
+    fun getByName(name: String): Provider<OcTemplateService> =
+        services[name]
+            ?: throw GradleException("Cannot find registered service '$name'. It may be disabled or misconfigured.")
+}

@@ -1,64 +1,47 @@
 package org.octopusden.octopus.oc.template.plugins.gradle
 
-import org.junit.jupiter.api.Test
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 
 class OcTemplatePluginTest {
 
     companion object {
-        const val DEFAULT_TEST_PROJECT_NAME = "template-project"
-        const val DEFAULT_TEMPLATE_YAML_FILE = "template-test.yaml"
-        const val DEFAULT_POD_NAME = "test-pod"
         const val DEFAULT_WORK_DIR = "okd"
         val DEFAULT_TASKS = arrayOf("clean", "build", "--info", "--stacktrace")
         val DEFAULT_OKD_NAMESPACE: String = System.getenv().getOrDefault("OKD_NAMESPACE", "test-env")
+        val DOCKER_REGISTRY: String = System.getenv()["DOCKER_REGISTRY"].toString()
     }
 
     @Test
     fun testSimpleProject() {
         val (instance, projectPath) = gradleProcessInstance {
-            testProjectName = DEFAULT_TEST_PROJECT_NAME
-            templateYamlFileName = DEFAULT_TEMPLATE_YAML_FILE
+            testProjectName = "projects/project-template"
+            templateYamlFileName = "templates/postgres-db.yaml"
             tasks = DEFAULT_TASKS
             additionalArguments = arrayOf(
                 "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
-                "-Pokd-pod-name=$DEFAULT_POD_NAME",
-                "-Pwork-directory=$DEFAULT_WORK_DIR"
+                "-Pwork-directory=$DEFAULT_WORK_DIR",
+                "-Pokd-pod-name=postgres-db",
+                "-Pdocker-registry=$DOCKER_REGISTRY",
             )
         }
         assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/$DEFAULT_TEMPLATE_YAML_FILE"))
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/logs/$DEFAULT_POD_NAME.log"))
-    }
-
-    @Test
-    fun testProjectWithEnvNamespace() {
-        val (instance, projectPath) = gradleProcessInstance {
-            testProjectName = DEFAULT_TEST_PROJECT_NAME
-            templateYamlFileName = DEFAULT_TEMPLATE_YAML_FILE
-            tasks = DEFAULT_TASKS
-            additionalArguments = arrayOf(
-                "-Pokd-pod-name=$DEFAULT_POD_NAME",
-                "-Pwork-directory=$DEFAULT_WORK_DIR"
-            )
-            additionalEnvVariables = mapOf("OKD_NAMESPACE" to DEFAULT_OKD_NAMESPACE)
-        }
-        assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/$DEFAULT_TEMPLATE_YAML_FILE"))
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/logs/$DEFAULT_POD_NAME.log"))
+        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/postgres-db.yaml")).exists()
+        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/logs/postgres-db.log")).exists()
     }
 
     @Test
     fun testMissingParameter() {
         val (instance, _) = gradleProcessInstance {
-            testProjectName = DEFAULT_TEST_PROJECT_NAME
-            templateYamlFileName = DEFAULT_TEMPLATE_YAML_FILE
+            testProjectName = "projects/project-template"
+            templateYamlFileName = "templates/postgres-db.yaml"
             tasks = DEFAULT_TASKS
             additionalArguments = arrayOf(
                 "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
-                "-Pwork-directory=$DEFAULT_WORK_DIR"
+                "-Pwork-directory=$DEFAULT_WORK_DIR",
+                "-Pdocker-registry=$DOCKER_REGISTRY",
             )
         }
         assertNotEquals(0, instance.exitCode)
@@ -68,13 +51,42 @@ class OcTemplatePluginTest {
     }
 
     @Test
-    fun testInvalidOKDNamespace() {
-        val (instance, _) = gradleProcessInstance {
-            testProjectName = DEFAULT_TEST_PROJECT_NAME
-            templateYamlFileName = DEFAULT_TEMPLATE_YAML_FILE
+    fun testSimpleProjectWithoutPod() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/without-pod"
+            templateYamlFileName = "templates/simple-pvc.yaml"
             tasks = DEFAULT_TASKS
             additionalArguments = arrayOf(
-                "-Pokd-pod-name=$DEFAULT_POD_NAME",
+                "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
+                "-Pwork-directory=$DEFAULT_WORK_DIR"
+            )
+        }
+        assertEquals(0, instance.exitCode)
+        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/simple-pvc.yaml")).exists()
+    }
+
+    @Test
+    fun testNamespaceFromEnv() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/without-pod"
+            templateYamlFileName = "templates/simple-pvc.yaml"
+            tasks = DEFAULT_TASKS
+            additionalArguments = arrayOf(
+                "-Pwork-directory=$DEFAULT_WORK_DIR"
+            )
+            additionalEnvVariables = mapOf("OKD_NAMESPACE" to DEFAULT_OKD_NAMESPACE)
+        }
+        assertEquals(0, instance.exitCode)
+        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/simple-pvc.yaml")).exists()
+    }
+
+    @Test
+    fun testInvalidOKDNamespace() {
+        val (instance, _) = gradleProcessInstance {
+            testProjectName = "projects/without-pod"
+            templateYamlFileName = "templates/simple-pvc.yaml"
+            tasks = DEFAULT_TASKS
+            additionalArguments = arrayOf(
                 "-Pokd-namespace=invalid-namespace",
                 "-Pwork-directory=$DEFAULT_WORK_DIR"
             )
@@ -83,5 +95,45 @@ class OcTemplatePluginTest {
         assertThat(instance.stdErr).anySatisfy {
             assertThat(it).contains("in the namespace \"invalid-namespace\"")
         }
+    }
+
+    @Test
+    fun testProjectWithFailedResource() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/project-template"
+            templateYamlFileName = "templates/failed-resource.yaml"
+            tasks = DEFAULT_TASKS
+            additionalArguments = arrayOf(
+                "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
+                "-Pwork-directory=$DEFAULT_WORK_DIR",
+                "-Pokd-pod-name=failed-pod",
+                "-Pdocker-registry=$DOCKER_REGISTRY",
+                "-Pokd-wait-attempts=3",
+            )
+        }
+        assertNotEquals(0, instance.exitCode)
+        assertThat(instance.stdErr).anySatisfy {
+            assertThat(it).contains("Pods readiness check attempts exceeded")
+        }
+        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/failed-resource.yaml")).exists()
+    }
+
+    @Test
+    fun testProjectWithNestedServices() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/nested-services"
+            templateYamlFileName = "templates/postgres-db.yaml"
+            tasks = DEFAULT_TASKS
+            additionalArguments = arrayOf(
+                "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
+                "-Pwork-directory=$DEFAULT_WORK_DIR",
+                "-Pdocker-registry=$DOCKER_REGISTRY",
+            )
+        }
+        assertEquals(0, instance.exitCode)
+        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/service1/postgres-db.yaml")).exists()
+        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/service1/logs/postgres-db-1.log")).exists()
+        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/service2/postgres-db.yaml")).exists()
+        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/service2/logs/postgres-db-2.log")).exists()
     }
 }

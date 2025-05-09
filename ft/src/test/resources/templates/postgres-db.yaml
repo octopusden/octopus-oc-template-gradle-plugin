@@ -1,0 +1,69 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: test-postgres
+objects:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${POD_NAME}-pvc
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+      volumeMode: Filesystem
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: ${POD_NAME}
+      labels:
+        app.kubernetes.io/name: ${POD_NAME}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: ${POD_NAME}
+          image: ${DOCKER_REGISTRY}/postgres:latest
+          env:
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgres
+            - name: POSTGRES_USER
+              value: postgres
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - exec pg_isready -U postgres
+            periodSeconds: 10
+          volumeMounts:
+            - name: ${POD_NAME}-data
+              mountPath: /var/lib/postgresql/
+      volumes:
+        - name: ${POD_NAME}-data
+          persistentVolumeClaim:
+            claimName: ${POD_NAME}-pvc
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: ${POD_NAME}-service
+    spec:
+      ports:
+        - port: 5432
+          protocol: TCP
+          targetPort: 5432
+      selector:
+        app.kubernetes.io/name: ${POD_NAME}
+parameters:
+  - description: Docker registry
+    name: DOCKER_REGISTRY
+    required: true
+  - description: POD_NAME
+    name: POD_NAME
+    required: true

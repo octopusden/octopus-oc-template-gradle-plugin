@@ -1,6 +1,8 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.time.Duration
 
 plugins {
+    kotlin("jvm")
     groovy
     `java-gradle-plugin`
     `maven-publish`
@@ -19,6 +21,11 @@ repositories {
 
 dependencies {
     implementation(gradleApi())
+}
+
+tasks.named<GroovyCompile>("compileGroovy") {
+    dependsOn(tasks.named("compileKotlin"))
+    classpath += files(tasks.named<KotlinCompile>("compileKotlin").get().destinationDirectory)
 }
 
 gradlePlugin {

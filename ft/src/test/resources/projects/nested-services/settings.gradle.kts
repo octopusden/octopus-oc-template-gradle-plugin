@@ -4,4 +4,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "template-project"
+rootProject.name = "nested-services"
