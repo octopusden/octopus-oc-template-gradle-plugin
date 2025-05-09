@@ -54,7 +54,7 @@ abstract class OcTemplateService @Inject constructor(
     fun process() {
         execOperations.exec {
             it.setCommandLine(
-                "/opt/homebrew/bin/oc", "process", "--local", "-o", "yaml",
+                "oc", "process", "--local", "-o", "yaml",
                 "-f", templateFile.absolutePath,
                 *parameters.templateParameters.get().flatMap { parameter ->
                     listOf("-p", "${parameter.key}=${parameter.value}")
@@ -67,7 +67,7 @@ abstract class OcTemplateService @Inject constructor(
     fun create() {
         delete()
         execOperations.exec {
-            it.setCommandLine("/opt/homebrew/bin/oc", "create", "-n", namespace, "-f", processedFile.absolutePath)
+            it.setCommandLine("oc", "create", "-n", namespace, "-f", processedFile.absolutePath)
         }.assertNormalExitValue()
     }
 
@@ -89,7 +89,7 @@ abstract class OcTemplateService @Inject constructor(
             output = ByteArrayOutputStream()
             execOperations.exec {
                 it.setCommandLine(
-                    "/opt/homebrew/bin/oc", "get", "-n", namespace, "-f", processedFile.absolutePath,
+                    "oc", "get", "-n", namespace, "-f", processedFile.absolutePath,
                     "-o", "jsonpath='{.items[*].status.containerStatuses[0].ready}'"
                 )
                 it.standardOutput = output
@@ -106,7 +106,7 @@ abstract class OcTemplateService @Inject constructor(
     fun logs() {
         podResources.forEach { resource ->
             execOperations.exec {
-                it.setCommandLine("/opt/homebrew/bin/oc", "logs", "-n", namespace, resource)
+                it.setCommandLine("oc", "logs", "-n", namespace, resource)
                 it.standardOutput = logs.file("$resource.log").asFile.outputStream()
             }
         }
@@ -114,7 +114,7 @@ abstract class OcTemplateService @Inject constructor(
 
     fun delete() {
         execOperations.exec {
-            it.setCommandLine("/opt/homebrew/bin/oc", "delete", "--ignore-not-found", "-n", namespace, "-f", processedFile.absolutePath)
+            it.setCommandLine("oc", "delete", "--ignore-not-found", "-n", namespace, "-f", processedFile.absolutePath)
         }.assertNormalExitValue()
     }
 
