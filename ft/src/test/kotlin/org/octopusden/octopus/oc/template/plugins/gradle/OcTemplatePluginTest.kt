@@ -136,4 +136,22 @@ class OcTemplatePluginTest {
         assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/service2/postgres-db.yaml")).exists()
         assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/service2/logs/postgres-db-2.log")).exists()
     }
+
+    @Test
+    fun testProjectWithNestedServicesMisconfiguration() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/nested-services-misconfiguration"
+            templateYamlFileName = "templates/postgres-db.yaml"
+            tasks = DEFAULT_TASKS
+            additionalArguments = arrayOf(
+                "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
+                "-Pwork-directory=$DEFAULT_WORK_DIR",
+                "-Pdocker-registry=$DOCKER_REGISTRY",
+            )
+        }
+        assertNotEquals(0, instance.exitCode)
+        assertThat(instance.stdErr).anySatisfy {
+            assertThat(it).contains("Cannot find registered service 'postgres-db-2'. It may be disabled or misconfigured")
+        }
+    }
 }
