@@ -9,7 +9,7 @@ abstract class OcWaitTask extends BaseOcTask {
 
     @Inject
     OcWaitTask() {
-        super("Wait for resources (pods) to be ready")
+        super("Waits for pod resources to become ready")
     }
 
     @Override

@@ -9,7 +9,7 @@ abstract class OcCreateTask extends BaseOcTask {
 
     @Inject
     OcCreateTask() {
-        super("Create resources from templates")
+        super("Creates resources from processed templates for all services")
     }
 
     @Override

@@ -9,7 +9,7 @@ abstract class OcLogsTask extends BaseOcTask {
 
     @Inject
     OcLogsTask() {
-        super("")
+        super("Fetches logs from pods for all services")
     }
 
     @Override

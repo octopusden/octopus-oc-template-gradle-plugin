@@ -9,7 +9,7 @@ abstract class OcProcessTask extends BaseOcTask {
 
     @Inject
     OcProcessTask() {
-        super("Initialize and process OpenShift templates with parameters")
+        super("Processes all registered OpenShift templates with parameters")
     }
 
     @Override

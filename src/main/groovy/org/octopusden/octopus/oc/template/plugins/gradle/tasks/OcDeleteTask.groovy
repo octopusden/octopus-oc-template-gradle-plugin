@@ -9,7 +9,7 @@ class OcDeleteTask extends BaseOcTask {
 
     @Inject
     OcDeleteTask() {
-        super("Clean up by deleting the created resources")
+        super("Deletes all created resources for cleanup")
     }
 
     @Override

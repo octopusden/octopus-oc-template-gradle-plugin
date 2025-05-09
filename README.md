@@ -1,35 +1,36 @@
-# octopus-oc-template-gradle-plugin
+# Octopus OC Template Gradle Plugin
 This Gradle plugin provides a convenient way to interact with OKD/OpenShift templates in your build process. It wraps common oc CLI commands into easily callable Gradle tasks.
 
 ### Tasks
-- `ocTemplateProcess` initialize and process OpenShift templates with parameters
-- `ocTemplateCreate` create resources from templates
-- `ocTemplateWaitReadiness` wait for pods to be ready
-- `ocTemplateLogs` fetch logs from pods
-- `ocTemplateDelete` clean up by deleting the created resources
+This plugin automatically generates Gradle tasks to manage OpenShift resources based on your registered services & templates:
+- `ocProcessAll` - Processes all registered OpenShift templates with parameters
+- `ocCreateAll` - Creates resources from processed templates for all services
+- `ocWaitReadinessAll` - Waits for pods (defined in services) to become ready
+- `ocLogsAll` - Fetches logs from pods for all services
+- `ocDeleteAll` - Deletes all created resources for cleanup
 
-### Usage
+### Getting Started
 #### Apply the Plugin
-
 ```kotlin
 plugins {
    id("org.octopusden.octopus.oc-template")
 }
 ```
 
-#### Basic Usage
+### Configuration Example
 ```kotlin
 ocTemplate {
-    namespace.set("default-namespace") // Default namespace for all services
-    workDirectory.set(layout.buildDirectory.dir("oc-work")) // Directory for processed resources and logs
+    namespace.set("default-namespace") // Default namespace, can be set from env variable: OKD_NAMESPACE
+    workDir.set(layout.buildDirectory.dir("oc-work")) // Stores generated resources/logs, default: build/oc-template
 
-    enabled.set(true) // Default to true (creating all ocTemplate tasks, e.g., ocTemplateProcess, ocTemplateCreate)
-    isRequiredBy("test") // Ensure all declared services are prepared before running the "test" task
+    enabled.set(true) // Enables all ocTemplate (e.g., ocProcessAll, ocCreateAll) tasks, default: true
+    isRequiredBy(tasks.named("test")) // Ensures resources from registered services are ready before "test" runs
 
-    // Optional readiness check settings
-    period.set(1200L)  // Delay (ms) between pod readiness checks
-    attempts.set(20)   // Max number of readiness check attempts
+    // Optional pods readiness settings
+    period.set(1200L)  // Delay (ms) between readiness checks, default: 15000L
+    attempts.set(20)   // Max number of check attempts, default: 20
 
+    // Register services
     service("database") {
         templateFile.set(file("templates/database-template.yaml"))
         parameters.set(mapOf(
@@ -37,65 +38,60 @@ ocTemplate {
             "DATABASE_USER" to "user"
         ))
     }
-
+    
     service("backend") {
         templateFile.set(file("templates/backend-template.yaml"))
-        podNames.set("backend-pod")  // Explicitly define pod name(s) created from template
-        dependsOn("database")  // Service dependency
+        parameters.set(mapOf(
+            "USER" to "user"
+        ))
+        
+        // Required to declare the pod names if the template generate pods resources, will be used for pods readiness check
+        // Use "template.alpha.openshift.io/wait-for-ready" annotation if the template doesn't create any pod resource
+        pods.set(listOf("backend-pod")) 
+        
+        // Declared dependencies to another services
+        // Ensures that database resource is ready before creating backend resource
+        dependsOn.set(listOf("database"))
+        
     }
 }
 ```
 
-#### Advance Usage
+#### Grouping Services
+Use nested groups when a set of services shares the same configuration but differs from the global setup:
 ```kotlin
 ocTemplate {
-    namespace.set("default-namespace") 
-    workDirectory.set(layout.buildDirectory.dir("oc-work"))
-
-    isRequiredBy("test")
-
-    val testProfile = project.findProperty("testProfile") as String? ?: "bitbucket"
-
-    // Group of services configuration
-    // All parameters from ocTemplate can be overridden on group nested service configurations
-    giteaServices {
+    // Group services with same configuration
+    group("giteaServices").apply {
         // If enabled, ocTemplate tasks for giteaServices will be registered 
-        // e.g, ocTemplateProcessGiteaServices, ocTemplateCreateGiteaServices
+        // e.g, ocProcessAllGiteaServices, ocCreateAllGiteaServices
         enabled.set(testProfile == "gitea")
 
-        // Override global settings within this group
+        // Override the global settings within this group
         namespace.set("gitea-namespace")
-        period.set(2400L)
+        period.set(24000L)
         attempts.set(50)
 
         service("gitea") {
             templateFile.set(file("templates/gitea-template.yaml"))
         }
-        
+
         service("opensearch") {
             templateFile.set(file("templates/opensearch-template.yaml"))
             dependsOn("gitea")
-            
-            // All parameters from ocTemplate/giteaServices can be overridden on service configuration
-            namespace.set("opensearch-namespace")
-        }
-    }
-    
-    bitbucketServices {
-        enabled.set(testProfile == "bitbucket")
-        
-        service("bitbucket") {
-            templateFile.set(file("templates/bitbucket-template.yaml"))
-        }
-    }
-    
-    service("vcs-facade") {
-        templateFile.set(file("templates/vcs-facade-template.yaml"))
-        if (testProfile == "bitbucket") {
-            dependsOn("bitbucket")
-        } else {
-            dependsOn("gitea", "opensearch")
         }
     }
 }
 ```
+<details>
+<summary>Groovy</summary>
+
+```groovy
+ocTemplate {
+    giteaServices {
+        enabled.set(testProfile == "gitea")
+    }
+}
+```
+
+</details>
