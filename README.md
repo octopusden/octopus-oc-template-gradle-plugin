@@ -23,7 +23,7 @@ ocTemplate {
     namespace.set("default-namespace") // Default namespace, can be set from env variable: OKD_NAMESPACE
     workDir.set(layout.buildDirectory.dir("oc-work")) // Stores generated resources/logs, default: build/oc-template
 
-    clusterDomain("apps.ocpd.eq.openwaygroup.com") // Can be set from env variable: OKD_CLUSTER_DOMAIN
+    clusterDomain("apps.ocpd.eq.openmind.org") // Can be set from env variable: OKD_CLUSTER_DOMAIN
     prefix.set("ft") // Deployment prefix
     version.set("1.0.0") // Default to project.version
     
