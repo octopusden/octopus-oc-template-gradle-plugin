@@ -27,6 +27,11 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
     val ocTemplateGradlePluginVersion = System.getenv().getOrDefault("OC_TEMPLATE_GRADLE_PLUGIN_VERSION", "1.0-SNAPSHOT")
     val templateYamlPath = getResourcePath("/${testGradleDSL.templateYamlFileName}", "Template YAML file")
 
+    val okdClusterDomain = System.getenv("OKD_CLUSTER_DOMAIN")
+    if (okdClusterDomain == null) {
+        throw IllegalArgumentException("OKD_CLUSTER_DOMAIN is required")
+    }
+
     val projectPath = getResourcePath("/${testGradleDSL.testProjectName}", "Test project")
     if (!Files.isDirectory(projectPath)) {
         throw IllegalArgumentException("The specified project '${testGradleDSL.testProjectName}' hasn't been found at $projectPath")
@@ -34,7 +39,10 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
 
     return Pair(ProcessBuilders
         .newProcessBuilder<ProcessBuilder>(LocalProcessSpec.LOCAL_COMMAND)
-        .envVariables(mapOf("JAVA_HOME" to System.getProperties().getProperty("java.home")) + testGradleDSL.additionalEnvVariables)
+        .envVariables(mapOf(
+            "JAVA_HOME" to System.getProperties().getProperty("java.home"),
+            "OKD_CLUSTER_DOMAIN" to okdClusterDomain
+        ) + testGradleDSL.additionalEnvVariables)
         .logger { it.logger(LOGGER) }
         .defaultExtensionMapping()
         .workDirectory(projectPath)

@@ -6,32 +6,31 @@ plugins {
 val yamlTemplateFile = project.findProperty("yaml-template-file") as? String ?: ""
 val okdNamespace = project.findProperty("okd-namespace") as String?
 val workDirectoryPath = project.findProperty("work-directory") as? String ?: ""
-
 val dockerRegistry = project.findProperty("docker-registry") as? String ?: ""
+val projectPrefix = project.findProperty("project-prefix") as? String ?: ""
 
 ocTemplate {
     namespace.set(okdNamespace)
     workDir.set(layout.buildDirectory.dir("$workDirectoryPath/service1"))
+    prefix.set(projectPrefix)
 
-    service("postgres-db") {
+    service("postgres-1") {
         templateFile.set(file(yamlTemplateFile))
         parameters.set(mapOf(
-            "POD_NAME" to "postgres-db-1",
+            "POD_NAME" to "postgres-1",
             "DOCKER_REGISTRY" to dockerRegistry
         ))
-        pods.set(listOf("postgres-db-1"))
-        dependsOn.set(listOf("postgres-db-2"))
+        dependsOn.set(listOf("postgres-2"))
     }
 
     group("otherService").apply {
         workDir.set(layout.buildDirectory.dir("$workDirectoryPath/service2"))
-        service("postgres-db-2") {
+        service("postgres-2") {
             templateFile.set(file(yamlTemplateFile))
             parameters.set(mapOf(
-                "POD_NAME" to "postgres-db-2",
+                "POD_NAME" to "postgres-2",
                 "DOCKER_REGISTRY" to dockerRegistry
             ))
-            pods.set(listOf("postgres-db-2"))
         }
     }
 

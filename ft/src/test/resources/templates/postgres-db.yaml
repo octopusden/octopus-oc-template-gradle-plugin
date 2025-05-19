@@ -1,12 +1,12 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: test-postgres
+  name: postgres
 objects:
   - apiVersion: v1
     kind: PersistentVolumeClaim
     metadata:
-      name: ${POD_NAME}-pvc
+      name: ${DEPLOYMENT_PREFIX}-${POD_NAME}-pvc
     spec:
       accessModes:
         - ReadWriteOnce
@@ -17,13 +17,13 @@ objects:
   - apiVersion: v1
     kind: Pod
     metadata:
-      name: ${POD_NAME}
+      name: ${DEPLOYMENT_PREFIX}-${POD_NAME}
       labels:
-        app.kubernetes.io/name: ${POD_NAME}
+        app.kubernetes.io/name: ${DEPLOYMENT_PREFIX}-${POD_NAME}
     spec:
       restartPolicy: Never
       containers:
-        - name: ${POD_NAME}
+        - name: ${DEPLOYMENT_PREFIX}-${POD_NAME}
           image: ${DOCKER_REGISTRY}/postgres:latest
           env:
             - name: POSTGRES_DB
@@ -41,27 +41,31 @@ objects:
                 - exec pg_isready -U postgres
             periodSeconds: 10
           volumeMounts:
-            - name: ${POD_NAME}-data
+            - name: ${DEPLOYMENT_PREFIX}-${POD_NAME}-data
               mountPath: /var/lib/postgresql/
       volumes:
-        - name: ${POD_NAME}-data
+        - name: ${DEPLOYMENT_PREFIX}-${POD_NAME}-data
           persistentVolumeClaim:
-            claimName: ${POD_NAME}-pvc
+            claimName: ${DEPLOYMENT_PREFIX}-${POD_NAME}-pvc
   - apiVersion: v1
     kind: Service
     metadata:
-      name: ${POD_NAME}-service
+      name: ${DEPLOYMENT_PREFIX}-${POD_NAME}-service
     spec:
       ports:
         - port: 5432
           protocol: TCP
           targetPort: 5432
       selector:
-        app.kubernetes.io/name: ${POD_NAME}
+        app.kubernetes.io/name: ${DEPLOYMENT_PREFIX}-${POD_NAME}
 parameters:
   - description: Docker registry
     name: DOCKER_REGISTRY
     required: true
-  - description: POD_NAME
+  - description: Pod name
     name: POD_NAME
+    required: false
+    value: postgres
+  - description: DEPLOYMENT_PREFIX
+    name: DEPLOYMENT_PREFIX
     required: true

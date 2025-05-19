@@ -3,7 +3,6 @@ package org.octopusden.octopus.oc.template.plugins.gradle.service
 import org.gradle.api.file.Directory
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
-import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.services.BuildService
@@ -27,17 +26,19 @@ abstract class OcTemplateService @Inject constructor(
         val workDir: DirectoryProperty
         val period: Property<Long>
         val attempts: Property<Int>
-        val podResources: ListProperty<String>
     }
 
     private val namespace = parameters.namespace.get()
     private val templateFile: File = parameters.templateFile.get().asFile
     private val period = parameters.period.get()
     private val attempts = parameters.attempts.get()
-    private val podResources = parameters.podResources.get()
 
     private val processedFile: File
     private val logs: Directory
+
+    private val deploymentPrefix: String
+    private val podResources = mutableListOf<String>()
+    private val routeResources = mutableListOf<String>()
 
     private val logger: Logger = LoggerFactory.getLogger(OcTemplateService::class.java)
 
@@ -49,6 +50,7 @@ abstract class OcTemplateService @Inject constructor(
                 it.asFile.mkdir()
             }
         }
+        this.deploymentPrefix = parameters.templateParameters.get().getOrDefault("DEPLOYMENT_PREFIX", "")
     }
 
     fun process() {
@@ -69,38 +71,43 @@ abstract class OcTemplateService @Inject constructor(
         execOperations.exec {
             it.setCommandLine("oc", "create", "-n", namespace, "-f", processedFile.absolutePath)
         }.assertNormalExitValue()
+        updateCreatedResources()
     }
 
     fun waitReadiness() {
-        if (podResources.isNotEmpty()) {
-            waitPodsForReady()
+        if (podResources.isEmpty()) {
+            logger.info("No pod resources found to check for readiness")
         } else {
-            logger.info("No pod resources found to check for readiness. " +
-                    "If you're using higher-level podResources (Deployments, Jobs, etc.), ensure they have the 'template.alpha.openshift.io/wait-for-ready' annotation for proper readiness handling.")
+            waitPodsReadiness()
         }
     }
 
-    private fun waitPodsForReady() {
+    private fun waitPodsReadiness() {
         var ready = false
         var counter = 0
         var output: OutputStream
+
+        val jsonPath = if (podResources.size == 1) {
+            "jsonpath='{.status.containerStatuses[0].ready}'"
+        } else {
+            "jsonpath='{.items[*].status.containerStatuses[0].ready}'"
+        }
+
         while (!ready && counter++ < attempts) {
             Thread.sleep(period)
             output = ByteArrayOutputStream()
             execOperations.exec {
-                it.setCommandLine(
-                    "oc", "get", "-n", namespace, "-f", processedFile.absolutePath,
-                    "-o", "jsonpath='{.items[*].status.containerStatuses[0].ready}'"
-                )
+                it.commandLine("oc", "get", "pod", *podResources.toTypedArray(), "-n", namespace, "-o", jsonPath)
                 it.standardOutput = output
-            }.assertNormalExitValue()
+            }
             val outputString = String(output.toByteArray())
             logger.info(">> Check pods readiness status: $outputString")
-            ready = outputString.contains("true")
+            ready = !outputString.contains("false")
         }
         if (!ready) {
             throw Exception("Pods readiness check attempts exceeded")
         }
+
     }
 
     fun logs() {
@@ -116,6 +123,30 @@ abstract class OcTemplateService @Inject constructor(
         execOperations.exec {
             it.setCommandLine("oc", "delete", "--ignore-not-found", "-n", namespace, "-f", processedFile.absolutePath)
         }.assertNormalExitValue()
+        clearCreatedResources()
+    }
+
+    private fun updateCreatedResources() {
+        val output = ByteArrayOutputStream()
+        execOperations.exec {
+            it.setCommandLine("oc", "get", "pods,route", "-n", namespace, "-o", "name")
+            it.standardOutput = output
+        }
+        val outputString = String(output.toByteArray())
+
+        clearCreatedResources()
+
+        outputString.lines().forEach { line ->
+            when {
+                line.startsWith("pod/$deploymentPrefix") -> podResources.add(line.removePrefix("pod/"))
+                line.startsWith("route/$deploymentPrefix") -> routeResources.add(line.removePrefix("route/"))
+            }
+        }
+    }
+
+    private fun clearCreatedResources() {
+        podResources.clear()
+        routeResources.clear()
     }
 
     override fun close() {

@@ -1,14 +1,14 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: test-postgres
+  name: postgres
 objects:
   - apiVersion: v1
     kind: Pod
     metadata:
-      name: ${POD_NAME}
+      name: ${DEPLOYMENT_PREFIX}-postgres
       labels:
-        app.kubernetes.io/name: ${POD_NAME}
+        app.kubernetes.io/name: ${DEPLOYMENT_PREFIX}-postgres
     spec:
       restartPolicy: Never
       containers:
@@ -26,6 +26,6 @@ parameters:
   - description: Docker registry
     name: DOCKER_REGISTRY
     required: true
-  - description: POD_NAME
-    name: POD_NAME
+  - description: DEPLOYMENT_PREFIX
+    name: DEPLOYMENT_PREFIX
     required: true

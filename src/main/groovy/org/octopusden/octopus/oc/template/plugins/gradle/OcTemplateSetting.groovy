@@ -21,6 +21,11 @@ abstract class OcTemplateSetting {
     abstract Property<Boolean> getEnabled()
     abstract Property<String> getNamespace()
     abstract DirectoryProperty getWorkDir()
+
+    abstract Property<String> getClusterDomain()
+    abstract Property<String> getPrefix()
+    abstract Property<String> getProjectVersion()
+
     abstract Property<Long> getPeriod()
     abstract Property<Integer> getAttempts()
 
@@ -39,6 +44,12 @@ abstract class OcTemplateSetting {
             namespace.set(System.getenv("OKD_NAMESPACE"))
         }
         workDir.set(project.layout.buildDirectory.dir("oc-template"))
+
+        if (System.getenv("OKD_CLUSTER_DOMAIN") != null) {
+            clusterDomain.set(System.getenv("OKD_CLUSTER_DOMAIN"))
+        }
+        projectVersion.set(project.version.toString())
+
         period.set(DEFAULT_WAIT_PERIOD)
         attempts.set(DEFAULT_WAIT_ATTEMPTS)
 
@@ -70,11 +81,18 @@ abstract class OcTemplateSetting {
 
         newTemplateSetting.enabled.set(this.enabled.get())
         newTemplateSetting.namespace.set(this.namespace.get())
+        newTemplateSetting.clusterDomain.set(this.clusterDomain.get())
+        newTemplateSetting.prefix.set(this.prefix.get())
+        newTemplateSetting.projectVersion.set(this.projectVersion.get())
         newTemplateSetting.workDir.set(this.workDir.get())
         newTemplateSetting.period.set(this.period.get())
         newTemplateSetting.attempts.set(this.attempts.get())
 
         return newTemplateSetting
+    }
+
+    protected String getDeploymentPrefix() {
+        return "${prefix.get()}-${projectVersion.get()}".toLowerCase().replaceAll(/[^-a-z0-9]/, "-")
     }
 
     void isRequiredBy(Task task) {
@@ -85,4 +103,11 @@ abstract class OcTemplateSetting {
         taskProvider.configure { taskConfigurations.isRequiredBy(it) }
     }
 
+    String getPod(String serviceName) {
+        return "${getDeploymentPrefix()}-$serviceName"
+    }
+
+    String getOkdHost(String serviceName) {
+        return "${getPod(serviceName)}-route-${namespace.get()}.${clusterDomain.get()}"
+    }
 }

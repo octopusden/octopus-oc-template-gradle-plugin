@@ -23,6 +23,10 @@ ocTemplate {
     namespace.set("default-namespace") // Default namespace, can be set from env variable: OKD_NAMESPACE
     workDir.set(layout.buildDirectory.dir("oc-work")) // Stores generated resources/logs, default: build/oc-template
 
+    clusterDomain("apps.ocpd.eq.openwaygroup.com") // Can be set from env variable: OKD_CLUSTER_DOMAIN
+    prefix.set("ft") // Deployment prefix
+    version.set("1.0.0") // Default to project.version
+    
     enabled.set(true) // Enables all ocTemplate (e.g., ocProcessAll, ocCreateAll) tasks, default: true
     isRequiredBy(tasks.named("test")) // Ensures resources from registered services are ready before "test" runs
 
@@ -45,14 +49,9 @@ ocTemplate {
             "USER" to "user"
         ))
         
-        // Required to declare the pod names if the template generate pods resources, will be used for pods readiness check
-        // Use "template.alpha.openshift.io/wait-for-ready" annotation if the template doesn't create any pod resource
-        pods.set(listOf("backend-pod")) 
-        
         // Declared dependencies to another services
         // Ensures that database resource is ready before creating backend resource
         dependsOn.set(listOf("database"))
-        
     }
 }
 ```

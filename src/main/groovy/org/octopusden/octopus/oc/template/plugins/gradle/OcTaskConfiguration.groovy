@@ -52,11 +52,10 @@ class OcTaskConfiguration {
                 new OcTemplateServiceParametersDTO(
                     ocTemplateSettings.namespace,
                     serviceSetting.templateFile,
-                    serviceSetting.parameters,
+                    project.objects.mapProperty(String, String).value(getDefaultParameters() + serviceSetting.parameters.get()),
                     ocTemplateSettings.workDir,
                     ocTemplateSettings.period,
-                    ocTemplateSettings.attempts,
-                    serviceSetting.pods
+                    ocTemplateSettings.attempts
                 )) as Provider<OcTemplateService>
             serviceDependencyGraph.add(serviceName, serviceSetting.dependsOn.get())
         }
@@ -114,4 +113,9 @@ class OcTaskConfiguration {
         return extension
     }
 
+    private Map<String, String> getDefaultParameters() {
+        return [
+            "DEPLOYMENT_PREFIX": ocTemplateSettings.getDeploymentPrefix()
+        ]
+    }
 }
