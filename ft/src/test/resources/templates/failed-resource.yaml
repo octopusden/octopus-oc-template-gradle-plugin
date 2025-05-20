@@ -1,0 +1,31 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: postgres
+objects:
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: ${DEPLOYMENT_PREFIX}-postgres
+      labels:
+        app.kubernetes.io/name: ${DEPLOYMENT_PREFIX}-postgres
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: postgres-db
+          image: ${DOCKER_REGISTRY}/postgres:latest
+          env:
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_HOST_AUTH_METHOD
+              value: trust
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+parameters:
+  - description: Docker registry
+    name: DOCKER_REGISTRY
+    required: true
+  - description: DEPLOYMENT_PREFIX
+    name: DEPLOYMENT_PREFIX
+    required: true

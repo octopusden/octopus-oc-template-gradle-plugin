@@ -1,0 +1,22 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: simple-pvc
+  annotations:
+    description: "Simple OpenShift PVC for test"
+    template.alpha.openshift.io/wait-for-ready: "true"
+objects:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${DEPLOYMENT_PREFIX}-simple-pvc
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Mi
+parameters:
+  - description: DEPLOYMENT_PREFIX
+    name: DEPLOYMENT_PREFIX
+    required: true
