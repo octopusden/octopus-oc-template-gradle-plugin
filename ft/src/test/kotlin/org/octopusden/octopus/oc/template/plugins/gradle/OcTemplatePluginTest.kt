@@ -51,6 +51,10 @@ class OcTemplatePluginTest {
         assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/logs").toFile().listFiles()).isEmpty()
     }
 
+    /**
+     * Verifies that simple REST service can be deployed & the endpoint responds as expected.
+     * The service route is retrieved via the plugin & the endpoint check is performed in the project's `build.gradle`.
+     */
     @Test
     fun testSimpleRestService() {
         val (instance, projectPath) = gradleProcessInstance {

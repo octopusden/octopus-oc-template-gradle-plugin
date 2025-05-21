@@ -122,3 +122,10 @@ metadata:
     name: ${DEPLOYMENT_PREFIX}-postgres
 ```
 You may add a suffix if needed, e.g., `${DEPLOYMENT_PREFIX}-postgres-app`, as long as the name starts with `${DEPLOYMENT_PREFIX}-postgres`.
+
+## Development
+### Running Functional Tests (FT)
+To run the functional tests, make sure to set the following environment variables:
+- `DOCKER_REGISTRY`
+- `OKD_NAMESPACE`, default to test-env
+- `OKD_CLUSTER_DOMAIN`
