@@ -97,7 +97,7 @@ class OcTaskConfiguration {
     }
 
     private static String generateTaskName(String settingName, OcTemplateTaskType taskName) {
-        return "oc${taskName.getTaskNameSuffix()}All${settingName.capitalize()}"
+        return "oc${taskName.getTaskNameSuffix()}${settingName.capitalize()}"
     }
 
     void isRequiredBy(Task task) {

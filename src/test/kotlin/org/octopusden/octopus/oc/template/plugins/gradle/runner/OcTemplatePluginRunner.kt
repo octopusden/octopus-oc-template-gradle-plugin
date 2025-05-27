@@ -1,16 +1,13 @@
-package org.octopusden.octopus.oc.template.plugins.gradle
+package org.octopusden.octopus.oc.template.plugins.gradle.runner
 
 import com.platformlib.process.api.ProcessInstance
 import com.platformlib.process.builder.ProcessBuilder
 import com.platformlib.process.factory.ProcessBuilders
 import com.platformlib.process.local.specification.LocalProcessSpec
-import org.slf4j.LoggerFactory
 import java.lang.IllegalArgumentException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-
-val LOGGER = LoggerFactory.getLogger("org.octopusden.octopus.oc.template.plugins.gradle")!!
 
 open class TestGradleDSL {
     lateinit var testProjectName: String
@@ -24,13 +21,8 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
     val testGradleDSL = TestGradleDSL()
     init.invoke(testGradleDSL)
 
-    val ocTemplateGradlePluginVersion = System.getenv().getOrDefault("OC_TEMPLATE_GRADLE_PLUGIN_VERSION", "1.0-SNAPSHOT")
+    val ocTemplateGradlePluginVersion = System.getProperty("ocTemplateGradlePluginVersion")
     val templateYamlPath = getResourcePath("/${testGradleDSL.templateYamlFileName}", "Template YAML file")
-
-    val okdClusterDomain = System.getenv("OKD_CLUSTER_DOMAIN")
-    if (okdClusterDomain == null) {
-        throw IllegalArgumentException("OKD_CLUSTER_DOMAIN is required")
-    }
 
     val projectPath = getResourcePath("/${testGradleDSL.testProjectName}", "Test project")
     if (!Files.isDirectory(projectPath)) {
@@ -40,10 +32,11 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
     return Pair(ProcessBuilders
         .newProcessBuilder<ProcessBuilder>(LocalProcessSpec.LOCAL_COMMAND)
         .envVariables(mapOf(
-            "JAVA_HOME" to System.getProperties().getProperty("java.home"),
-            "OKD_CLUSTER_DOMAIN" to okdClusterDomain
+            "JAVA_HOME" to System.getProperty("java.home"),
+            "OKD_CLUSTER_DOMAIN" to System.getProperty("okdClusterDomain")
         ) + testGradleDSL.additionalEnvVariables)
-        .logger { it.logger(LOGGER) }
+        .redirectStandardOutput(System.out)
+        .redirectStandardError(System.err)
         .defaultExtensionMapping()
         .workDirectory(projectPath)
         .processInstance { processInstanceConfiguration -> processInstanceConfiguration.unlimited() }

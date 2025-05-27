@@ -4,16 +4,17 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.octopusden.octopus.oc.template.plugins.gradle.runner.gradleProcessInstance
 
 class OcTemplatePluginTest {
 
     companion object {
         const val DEFAULT_WORK_DIR = "okd"
         const val DEFAULT_PROJECT_PREFIX = "oc-template-ft"
-        val DEFAULT_TASKS = arrayOf("clean", "build", "--info", "--stacktrace")
-        val DEFAULT_OKD_NAMESPACE: String = System.getenv().getOrDefault("OKD_NAMESPACE", "test-env")
-        val DOCKER_REGISTRY: String = System.getenv()["DOCKER_REGISTRY"].toString()
-        val DEFAULT_PARAMETERS = arrayOf(
+        private val DEFAULT_TASKS = arrayOf("clean", "build", "--info", "--stacktrace")
+        private val DEFAULT_OKD_NAMESPACE: String = System.getProperty("okdNamespace")
+        private val DOCKER_REGISTRY: String = System.getProperty("dockerRegistry")
+        private val DEFAULT_PARAMETERS = arrayOf(
             "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
             "-Pwork-directory=$DEFAULT_WORK_DIR",
             "-Pproject-prefix=$DEFAULT_PROJECT_PREFIX",
@@ -67,7 +68,7 @@ class OcTemplatePluginTest {
         assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/rest-service.yaml")).exists()
         assertThat(
             projectPath.resolve("build/$DEFAULT_WORK_DIR/logs").toFile().listFiles {
-                file -> file.name.startsWith(getLogFileName("simple-rest").removeSuffix(".log"))
+                    file -> file.name.startsWith(getLogFileName("simple-rest").removeSuffix(".log"))
             }
         ).hasSize(1);
     }
@@ -159,7 +160,7 @@ class OcTemplatePluginTest {
 
     @Test
     fun testProjectWithNestedServicesMisconfiguration() {
-        val (instance, projectPath) = gradleProcessInstance {
+        val (instance, _) = gradleProcessInstance {
             testProjectName = "projects/nested-services-misconfiguration"
             templateYamlFileName = "templates/postgres-db.yaml"
             tasks = DEFAULT_TASKS

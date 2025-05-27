@@ -3,11 +3,11 @@ This Gradle plugin provides a convenient way to interact with OKD/OpenShift temp
 
 ### Tasks
 This plugin automatically generates Gradle tasks to manage OpenShift resources based on your registered services & templates:
-- `ocProcessAll` - Processes all registered OpenShift templates with parameters
-- `ocCreateAll` - Creates resources from processed templates for all services
-- `ocWaitReadinessAll` - Waits for pods (defined in services) to become ready
-- `ocLogsAll` - Fetches logs from pods for all services
-- `ocDeleteAll` - Deletes all created resources for cleanup
+- `ocProcess` - Processes all registered OpenShift templates with parameters
+- `ocCreate` - Creates resources from processed templates for all services
+- `ocWaitReadiness` - Waits for pods (defined in services) to become ready
+- `ocLogs` - Fetches logs from pods for all services
+- `ocDelete` - Deletes all created resources for cleanup
 
 ### Getting Started
 #### Apply the Plugin
@@ -27,7 +27,7 @@ ocTemplate {
     prefix.set("ft") // Deployment prefix
     version.set("1.0.0") // Default to project.version
     
-    enabled.set(true) // Enables all ocTemplate (e.g., ocProcessAll, ocCreateAll) tasks, default: true
+    enabled.set(true) // Enables all ocTemplate (e.g., ocProcess, ocCreate) tasks, default: true
     isRequiredBy(tasks.named("test")) // Ensures resources from registered services are ready before "test" runs
 
     // Optional pods readiness settings
@@ -63,7 +63,7 @@ ocTemplate {
     // Group services with same configuration
     group("giteaServices").apply {
         // If enabled, ocTemplate tasks for giteaServices will be registered 
-        // e.g, ocProcessAllGiteaServices, ocCreateAllGiteaServices
+        // e.g, ocProcessGiteaServices, ocCreateGiteaServices
         enabled.set(testProfile == "gitea")
 
         // Override the global settings within this group

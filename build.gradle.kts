@@ -20,7 +20,11 @@ repositories {
 }
 
 dependencies {
-    implementation(gradleApi())
+    testApi("com.platformlib:platformlib-process-local:${project.extra["platformlib-process.version"]}")
+    testImplementation("org.assertj:assertj-core:${project.extra["assertj.version"]}")
+    testImplementation(platform("org.junit:junit-bom:${project.extra["junit-jupiter.version"]}"))
+    testImplementation("org.junit.jupiter:junit-jupiter-engine")
+    testImplementation("org.junit.jupiter:junit-jupiter-params")
 }
 
 tasks.named<GroovyCompile>("compileGroovy") {
@@ -36,6 +40,29 @@ gradlePlugin {
             description = "OC Template Gradle Plugin"
             implementationClass = "org.octopusden.octopus.oc.template.plugins.gradle.OcTemplateGradlePlugin"
         }
+    }
+}
+
+fun getTestParameter(envName: String, propertyName: String, defaultValue: String? = null): String {
+    return System.getenv(envName)
+        ?: (project.findProperty(propertyName) as String?)
+        ?: defaultValue
+        ?: throw IllegalStateException("Required test parameter '$envName' not found in environment variables or gradle properties (-P$propertyName)")
+}
+
+val testParameters by lazy {
+    mapOf(
+        "ocTemplateGradlePluginVersion" to getTestParameter("OC_TEMPLATE_GRADLE_PLUGIN_VERSION", "ocTemplateGradlePluginVersion", "1.0-SNAPSHOT"),
+        "okdClusterDomain" to getTestParameter("OKD_CLUSTER_DOMAIN", "okdClusterDomain"),
+        "okdNamespace" to getTestParameter("OKD_NAMESPACE", "okdNamespace"),
+        "dockerRegistry" to getTestParameter("DOCKER_REGISTRY", "dockerRegistry")
+    )
+}
+
+tasks.test {
+    useJUnitPlatform()
+    doFirst {
+        testParameters.forEach { systemProperty(it.key, it.value) }
     }
 }
 
