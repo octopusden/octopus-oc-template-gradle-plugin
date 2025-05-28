@@ -15,7 +15,7 @@ open class OcTemplateServiceRegistry @Inject constructor (
     private val logger: Logger = LoggerFactory.getLogger(OcTemplateServiceRegistry::class.java)
 
     fun register(name: String, config: OcTemplateServiceParametersDTO): Provider<OcTemplateService> {
-        val buildServiceName = "ocTemplateService_$name"
+        val buildServiceName = "ocTemplateService_${project.name}_$name"
         val existing = project.gradle.sharedServices.registrations.findByName(buildServiceName)
 
         if (existing == null) logger.info("Register ocTemplateService: $buildServiceName")
