@@ -3,7 +3,6 @@ plugins {
     id("org.octopusden.octopus.oc-template")
 }
 
-val yamlTemplateFile = project.findProperty("yaml-template-file") as? String ?: ""
 val okdNamespace = project.findProperty("okd-namespace") as String?
 val workDirectoryPath = project.findProperty("work-directory") as? String ?: ""
 val dockerRegistry = project.findProperty("docker-registry") as? String ?: ""
@@ -20,7 +19,7 @@ ocTemplate {
     }
 
     service("postgres") {
-        templateFile.set(file(yamlTemplateFile))
+        templateFile.set(projectDir.resolve("template.yaml"))
         parameters.set(mapOf(
             "DOCKER_REGISTRY" to dockerRegistry
         ))

@@ -11,7 +11,6 @@ import java.nio.file.Paths
 
 open class TestGradleDSL {
     lateinit var testProjectName: String
-    lateinit var templateYamlFileName: String
     var additionalArguments: Array<String> = arrayOf()
     var additionalEnvVariables: Map<String, String> = mapOf()
     var tasks: Array<String> = arrayOf()
@@ -22,7 +21,6 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
     init.invoke(testGradleDSL)
 
     val ocTemplateGradlePluginVersion = System.getProperty("ocTemplateGradlePluginVersion")
-    val templateYamlPath = getResourcePath("/${testGradleDSL.templateYamlFileName}", "Template YAML file")
 
     val projectPath = getResourcePath("/${testGradleDSL.testProjectName}", "Test project")
     if (!Files.isDirectory(projectPath)) {
@@ -44,8 +42,7 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
         .build()
         .execute(
             *(listOf(
-                "-Poctopus-oc-template.version=$ocTemplateGradlePluginVersion",
-                "-Pyaml-template-file=$templateYamlPath"
+                "-Poctopus-oc-template.version=$ocTemplateGradlePluginVersion"
             ) + testGradleDSL.tasks + testGradleDSL.additionalArguments).toTypedArray())
         .toCompletableFuture()
         .join(), projectPath)
