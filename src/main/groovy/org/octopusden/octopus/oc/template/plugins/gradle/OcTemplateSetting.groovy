@@ -40,8 +40,8 @@ abstract class OcTemplateSetting {
         this.project = project
 
         enabled.set(true)
-        if (System.getenv("OKD_NAMESPACE") != null) {
-            namespace.set(System.getenv("OKD_NAMESPACE"))
+        if (System.getenv("OKD_PROJECT") != null) {
+            namespace.set(System.getenv("OKD_PROJECT"))
         }
         workDir.set(project.layout.buildDirectory.dir("oc-template"))
 

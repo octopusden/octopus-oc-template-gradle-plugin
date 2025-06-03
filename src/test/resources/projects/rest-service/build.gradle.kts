@@ -6,7 +6,7 @@ plugins {
     id("org.octopusden.octopus.oc-template")
 }
 
-val okdNamespace = project.findProperty("okd-namespace") as String?
+val okdProject = project.findProperty("okd-project") as String?
 val workDirectoryPath = project.findProperty("work-directory") as? String ?: ""
 val projectPrefix = project.findProperty("project-prefix") as? String ?: ""
 val dockerRegistry = project.findProperty("docker-registry") as? String ?: ""
@@ -14,7 +14,7 @@ val dockerRegistry = project.findProperty("docker-registry") as? String ?: ""
 val responseText = "OK"
 
 ocTemplate {
-    namespace.set(okdNamespace)
+    namespace.set(okdProject)
     workDir.set(layout.buildDirectory.dir(workDirectoryPath))
     prefix.set(projectPrefix)
 

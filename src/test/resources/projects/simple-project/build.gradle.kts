@@ -3,14 +3,14 @@ plugins {
     id("org.octopusden.octopus.oc-template")
 }
 
-val okdNamespace = project.findProperty("okd-namespace") as String?
+val okdProject = project.findProperty("okd-project") as String?
 val workDirectoryPath = project.findProperty("work-directory") as? String ?: ""
 val dockerRegistry = project.findProperty("docker-registry") as? String ?: ""
 val projectPrefix = project.findProperty("project-prefix") as? String ?: ""
 val waitAttempts = (project.findProperty("okd-wait-attempts") as String?)?.toInt()
 
 ocTemplate {
-    namespace.set(okdNamespace)
+    namespace.set(okdProject)
     workDir.set(layout.buildDirectory.dir(workDirectoryPath))
     prefix.set(projectPrefix)
 

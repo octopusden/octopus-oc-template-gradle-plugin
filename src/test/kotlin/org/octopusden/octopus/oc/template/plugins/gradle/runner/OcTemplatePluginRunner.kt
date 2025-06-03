@@ -20,8 +20,6 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
     val testGradleDSL = TestGradleDSL()
     init.invoke(testGradleDSL)
 
-    val ocTemplateGradlePluginVersion = System.getProperty("ocTemplateGradlePluginVersion")
-
     val projectPath = getResourcePath("/${testGradleDSL.testProjectName}", "Test project")
     if (!Files.isDirectory(projectPath)) {
         throw IllegalArgumentException("The specified project '${testGradleDSL.testProjectName}' hasn't been found at $projectPath")
@@ -30,8 +28,7 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
     return Pair(ProcessBuilders
         .newProcessBuilder<ProcessBuilder>(LocalProcessSpec.LOCAL_COMMAND)
         .envVariables(mapOf(
-            "JAVA_HOME" to System.getProperty("java.home"),
-            "OKD_CLUSTER_DOMAIN" to System.getProperty("okdClusterDomain")
+            "JAVA_HOME" to System.getProperty("java.home")
         ) + testGradleDSL.additionalEnvVariables)
         .redirectStandardOutput(System.out)
         .redirectStandardError(System.err)
@@ -42,7 +39,7 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
         .build()
         .execute(
             *(listOf(
-                "-Poctopus-oc-template.version=$ocTemplateGradlePluginVersion"
+                "-Poctopus-oc-template.version=${System.getProperty("ocTemplateGradlePluginVersion")}"
             ) + testGradleDSL.tasks + testGradleDSL.additionalArguments).toTypedArray())
         .toCompletableFuture()
         .join(), projectPath)

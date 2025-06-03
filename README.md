@@ -20,7 +20,7 @@ plugins {
 ### Configuration Example
 ```kotlin
 ocTemplate {
-    namespace.set("default-namespace") // Default namespace, can be set from env variable: OKD_NAMESPACE
+    namespace.set("default-namespace") // Default namespace, can be set from env variable: OKD_PROJECT
     workDir.set(layout.buildDirectory.dir("oc-work")) // Stores generated resources/logs, default: build/oc-template
 
     clusterDomain("apps.ocpd.eq.openmind.org") // Can be set from env variable: OKD_CLUSTER_DOMAIN
@@ -125,7 +125,7 @@ You may add a suffix if needed, e.g., `${DEPLOYMENT_PREFIX}-postgres-app`, as lo
 
 ## Development
 ### Running Functional Tests (FT)
-To run the functional tests, make sure to set the following environment variables:
-- `DOCKER_REGISTRY`
-- `OKD_NAMESPACE`, default to test-env
-- `OKD_CLUSTER_DOMAIN`
+To run the functional tests, ensure the following properties or environment variables are set:
+- `docker.registry` or `DOCKER_REGISTRY`
+- `okd.project` or `OKD_PROJECT`
+- `okd.cluster-domain` or `OKD_CLUSTER_DOMAIN`

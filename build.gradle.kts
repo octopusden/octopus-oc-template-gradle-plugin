@@ -52,15 +52,16 @@ fun getTestParameter(envName: String, propertyName: String, defaultValue: String
 
 val testParameters by lazy {
     mapOf(
-        "ocTemplateGradlePluginVersion" to getTestParameter("OC_TEMPLATE_GRADLE_PLUGIN_VERSION", "ocTemplateGradlePluginVersion", "1.0-SNAPSHOT"),
-        "okdClusterDomain" to getTestParameter("OKD_CLUSTER_DOMAIN", "okdClusterDomain"),
-        "okdNamespace" to getTestParameter("OKD_NAMESPACE", "okdNamespace"),
-        "dockerRegistry" to getTestParameter("DOCKER_REGISTRY", "dockerRegistry")
+        "ocTemplateGradlePluginVersion" to project.version,
+        "okdClusterDomain" to getTestParameter("OKD_CLUSTER_DOMAIN", "okd.cluster-domain"),
+        "okdProject" to getTestParameter("OKD_PROJECT", "okd.project"),
+        "dockerRegistry" to getTestParameter("DOCKER_REGISTRY", "docker.registry")
     )
 }
 
 tasks.test {
     useJUnitPlatform()
+    dependsOn("publishToMavenLocal")
     doFirst {
         testParameters.forEach { systemProperty(it.key, it.value) }
     }

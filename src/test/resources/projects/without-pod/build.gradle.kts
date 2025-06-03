@@ -3,7 +3,7 @@ plugins {
     id("org.octopusden.octopus.oc-template")
 }
 
-val okdNamespace = project.findProperty("okd-namespace") as String?
+val okdProject = project.findProperty("okd-project") as String?
 val workDirectoryPath = project.findProperty("work-directory") as? String ?: ""
 val projectPrefix = project.findProperty("project-prefix") as? String ?: ""
 
@@ -11,8 +11,8 @@ ocTemplate {
     workDir.set(layout.buildDirectory.dir(workDirectoryPath))
     prefix.set(projectPrefix)
 
-    if (okdNamespace != null) {
-        namespace.set(okdNamespace)
+    if (okdProject != null) {
+        namespace.set(okdProject)
     }
 
     service("simple-pvc") {

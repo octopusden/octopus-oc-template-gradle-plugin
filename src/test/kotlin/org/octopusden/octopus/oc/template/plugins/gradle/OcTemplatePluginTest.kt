@@ -9,45 +9,48 @@ import org.octopusden.octopus.oc.template.plugins.gradle.runner.gradleProcessIns
 class OcTemplatePluginTest {
 
     companion object {
-        const val DEFAULT_WORK_DIR = "okd"
-        const val DEFAULT_PROJECT_PREFIX = "oc-template-ft"
-        private val DEFAULT_TASKS = arrayOf("clean", "build", "--info", "--stacktrace")
-        private val DEFAULT_OKD_NAMESPACE: String = System.getProperty("okdNamespace")
+        const val WORK_DIR = "okd"
+        const val DEPLOYMENT_PREFIX = "oc-template-ft"
+        private val TASKS = arrayOf("clean", "build", "--info", "--stacktrace")
+        private val OKD_PROJECT: String = System.getProperty("okdProject")
         private val DOCKER_REGISTRY: String = System.getProperty("dockerRegistry")
         private val DEFAULT_PARAMETERS = arrayOf(
-            "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
-            "-Pwork-directory=$DEFAULT_WORK_DIR",
-            "-Pproject-prefix=$DEFAULT_PROJECT_PREFIX",
+            "-Pokd-project=$OKD_PROJECT",
+            "-Pwork-directory=$WORK_DIR",
+            "-Pproject-prefix=$DEPLOYMENT_PREFIX",
             "-Pdocker-registry=$DOCKER_REGISTRY"
         )
+        private val DEFAULT_ENV_VARIABLES = mapOf("OKD_CLUSTER_DOMAIN" to System.getProperty("okdClusterDomain"))
     }
 
     @Test
     fun testSimpleProject() {
         val (instance, projectPath) = gradleProcessInstance {
             testProjectName = "projects/simple-project"
-            tasks = DEFAULT_TASKS
+            tasks = TASKS
             additionalArguments = DEFAULT_PARAMETERS
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/template.yaml")).exists()
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/logs/${getLogFileName("postgres")}")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).exists()
     }
 
     @Test
     fun testSimpleProjectWithoutPod() {
         val (instance, projectPath) = gradleProcessInstance {
             testProjectName = "projects/without-pod"
-            tasks = DEFAULT_TASKS
+            tasks = TASKS
             additionalArguments = arrayOf(
-                "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
-                "-Pwork-directory=$DEFAULT_WORK_DIR",
+                "-Pokd-project=$OKD_PROJECT",
+                "-Pwork-directory=$WORK_DIR",
                 "-Pproject-prefix=oc-template-ft"
             )
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/template.yaml")).exists()
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/logs").toFile().listFiles()).isEmpty()
+        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles()).isEmpty()
     }
 
     /**
@@ -58,13 +61,14 @@ class OcTemplatePluginTest {
     fun testSimpleRestService() {
         val (instance, projectPath) = gradleProcessInstance {
             testProjectName = "projects/rest-service"
-            tasks = DEFAULT_TASKS
+            tasks = TASKS
             additionalArguments = DEFAULT_PARAMETERS
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
         assertThat(
-            projectPath.resolve("build/$DEFAULT_WORK_DIR/logs").toFile().listFiles {
+            projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles {
                 file -> file.name.startsWith(getLogFileName("simple-rest").removeSuffix(".log"))
             }
         ).hasSize(1);
@@ -74,12 +78,13 @@ class OcTemplatePluginTest {
     fun testMissingParameter() {
         val (instance, _) = gradleProcessInstance {
             testProjectName = "projects/simple-project"
-            tasks = DEFAULT_TASKS
+            tasks = TASKS
             additionalArguments = arrayOf(
-                "-Pokd-namespace=$DEFAULT_OKD_NAMESPACE",
-                "-Pwork-directory=$DEFAULT_WORK_DIR",
+                "-Pokd-project=$OKD_PROJECT",
+                "-Pwork-directory=$WORK_DIR",
                 "-Pproject-prefix=oc-template-ft"
             )
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertNotEquals(0, instance.exitCode)
         assertThat(instance.stdErr).anySatisfy {
@@ -91,30 +96,31 @@ class OcTemplatePluginTest {
     fun testNamespaceFromEnv() {
         val (instance, projectPath) = gradleProcessInstance {
             testProjectName = "projects/without-pod"
-            tasks = DEFAULT_TASKS
+            tasks = TASKS
             additionalArguments = arrayOf(
-                "-Pwork-directory=$DEFAULT_WORK_DIR",
-                "-Pproject-prefix=$DEFAULT_PROJECT_PREFIX"
+                "-Pwork-directory=$WORK_DIR",
+                "-Pproject-prefix=$DEPLOYMENT_PREFIX"
             )
-            additionalEnvVariables = mapOf(
-                "OKD_NAMESPACE" to DEFAULT_OKD_NAMESPACE
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES + mapOf(
+                "OKD_PROJECT" to OKD_PROJECT
             )
         }
         assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/template.yaml")).exists()
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/logs").toFile().listFiles()).isEmpty()
+        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles()).isEmpty()
     }
 
     @Test
-    fun testInvalidOKDNamespace() {
+    fun testInvalidOKDProject() {
         val (instance, _) = gradleProcessInstance {
             testProjectName = "projects/without-pod"
-            tasks = DEFAULT_TASKS
+            tasks = TASKS
             additionalArguments = arrayOf(
-                "-Pokd-namespace=invalid-namespace",
-                "-Pwork-directory=$DEFAULT_WORK_DIR",
-                "-Pproject-prefix=$DEFAULT_PROJECT_PREFIX"
+                "-Pokd-project=invalid-namespace",
+                "-Pwork-directory=$WORK_DIR",
+                "-Pproject-prefix=$DEPLOYMENT_PREFIX"
             )
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertNotEquals(0, instance.exitCode)
         assertThat(instance.stdErr).anySatisfy {
@@ -126,36 +132,39 @@ class OcTemplatePluginTest {
     fun testProjectWithFailedResource() {
         val (instance, projectPath) = gradleProcessInstance {
             testProjectName = "projects/failed-resource"
-            tasks = DEFAULT_TASKS
+            tasks = TASKS
             additionalArguments = DEFAULT_PARAMETERS + arrayOf("-Pokd-wait-attempts=3")
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertNotEquals(0, instance.exitCode)
         assertThat(instance.stdErr).anySatisfy {
             assertThat(it).contains("Pods readiness check attempts exceeded")
         }
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
     }
 
     @Test
     fun testProjectWithNestedServices() {
         val (instance, projectPath) = gradleProcessInstance {
             testProjectName = "projects/nested-services"
-            tasks = DEFAULT_TASKS
+            tasks = TASKS
             additionalArguments = DEFAULT_PARAMETERS
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/service1/template.yaml")).exists()
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/service1/logs/${getLogFileName("postgres-1")}")).exists()
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/service2/template.yaml")).exists()
-        assertThat(projectPath.resolve("build/$DEFAULT_WORK_DIR/service2/logs/${getLogFileName("postgres-2")}")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/service1/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/service1/logs/${getLogFileName("postgres-1")}")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/service2/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/service2/logs/${getLogFileName("postgres-2")}")).exists()
     }
 
     @Test
     fun testProjectWithNestedServicesMisconfiguration() {
         val (instance, _) = gradleProcessInstance {
             testProjectName = "projects/nested-services-misconfiguration"
-            tasks = DEFAULT_TASKS
+            tasks = TASKS
             additionalArguments = DEFAULT_PARAMETERS
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertNotEquals(0, instance.exitCode)
         assertThat(instance.stdErr).anySatisfy {
@@ -164,7 +173,7 @@ class OcTemplatePluginTest {
     }
 
     private fun getLogFileName(serviceName: String): String {
-        return "$DEFAULT_PROJECT_PREFIX-1-0-snapshot-$serviceName.log"
+        return "$DEPLOYMENT_PREFIX-1-0-snapshot-$serviceName.log"
     }
 
 }
