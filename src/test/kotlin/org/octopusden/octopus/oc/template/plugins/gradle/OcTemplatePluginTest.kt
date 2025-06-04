@@ -72,7 +72,7 @@ class OcTemplatePluginTest {
             projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles {
                 file -> file.name.startsWith(getLogFileName("simple-rest").removeSuffix(".log"))
             }
-        ).hasSize(1);
+        ).hasSize(1)
     }
 
     @Test
@@ -177,6 +177,24 @@ class OcTemplatePluginTest {
         assertThat(instance.stdErr).anySatisfy {
             assertThat(it).contains("Cannot find registered service 'postgres-2'. It may be disabled or misconfigured")
         }
+    }
+
+    @Test
+    fun testProjectWithoutVersion() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/without-version"
+            tasks = TASKS
+            additionalArguments = DEFAULT_PARAMETERS
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
+        }
+        assertEquals(0, instance.exitCode)
+        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
+        assertThat(
+            projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles {
+                    file -> file.name.startsWith(DEPLOYMENT_PREFIX) && file.name.endsWith("-snapshot-postgres.log")
+            }
+        ).hasSize(1)
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).doesNotExist()
     }
 
     private fun getLogFileName(serviceName: String): String {
