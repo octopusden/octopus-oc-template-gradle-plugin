@@ -25,7 +25,7 @@ ocTemplate {
 
     clusterDomain("apps.ocpd.eq.openmind.org") // Can be set from env variable: OKD_CLUSTER_DOMAIN
     prefix.set("ft") // Deployment prefix
-    version.set("1.0.0") // Default to project.version
+    projectVersion.set("1.0.0") // Defaults to project.version; if not set, a unique snapshot version will be generated
     
     enabled.set(true) // Enables all ocTemplate (e.g., ocProcess, ocCreate) tasks, default: true
     isRequiredBy(tasks.named("test")) // Ensures resources from registered services are ready before "test" runs
