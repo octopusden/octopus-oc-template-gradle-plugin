@@ -40,18 +40,12 @@ abstract class OcTemplateSetting {
         this.project = project
 
         enabled.set(true)
-        if (System.getenv("OKD_PROJECT") != null) {
-            namespace.set(System.getenv("OKD_PROJECT"))
-        }
         workDir.set(project.layout.buildDirectory.dir("oc-template"))
-
-        if (System.getenv("OKD_CLUSTER_DOMAIN") != null) {
-            clusterDomain.set(System.getenv("OKD_CLUSTER_DOMAIN"))
-        }
         projectVersion.set(project.version.toString())
-
         period.set(DEFAULT_WAIT_PERIOD)
         attempts.set(DEFAULT_WAIT_ATTEMPTS)
+
+        applyEnvVariableOverrides()
 
         this.taskConfigurations = new OcTaskConfiguration(this, project, name)
     }
@@ -80,13 +74,13 @@ abstract class OcTemplateSetting {
         OcTemplateSetting newTemplateSetting = project.objects.newInstance(OcTemplateSetting, project, name, nestedName)
 
         newTemplateSetting.enabled.set(this.enabled.get())
-        newTemplateSetting.namespace.set(this.namespace.get())
-        newTemplateSetting.clusterDomain.set(this.clusterDomain.get())
         newTemplateSetting.prefix.set(this.prefix.get())
         newTemplateSetting.projectVersion.set(this.projectVersion.get())
         newTemplateSetting.workDir.set(this.workDir.get())
         newTemplateSetting.period.set(this.period.get())
         newTemplateSetting.attempts.set(this.attempts.get())
+
+        newTemplateSetting.applyEnvVariableOverrides(this)
 
         return newTemplateSetting
     }
@@ -109,5 +103,26 @@ abstract class OcTemplateSetting {
 
     String getOkdHost(String serviceName) {
         return "${getPod(serviceName)}-route-${namespace.get()}.${clusterDomain.get()}"
+    }
+
+    /**
+     * Prioritizes values from environment variables <code>OKD_CLUSTER_DOMAIN</code> and
+     * <code>OKD_PROJECT</code> over the current or parent configuration, if provided.
+     * @param parent an optional parent setting to fall back to if environment variables are not set
+     */
+    private void applyEnvVariableOverrides(OcTemplateSetting parent = null) {
+        project.afterEvaluate {
+            applyEnvOverride("OKD_CLUSTER_DOMAIN", clusterDomain, parent?.clusterDomain?.get())
+            applyEnvOverride("OKD_PROJECT", namespace, parent?.namespace?.get())
+        }
+    }
+
+    private static void applyEnvOverride(String envKey, Property<String> targetProperty, String fallback = null) {
+        String envValue = System.getenv(envKey)
+        if (envValue != null && !envValue.isEmpty()) {
+            targetProperty.set(envValue)
+        } else if (fallback != null) {
+            targetProperty.set(fallback)
+        }
     }
 }

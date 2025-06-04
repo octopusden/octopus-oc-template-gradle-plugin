@@ -28,6 +28,8 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
     return Pair(ProcessBuilders
         .newProcessBuilder<ProcessBuilder>(LocalProcessSpec.LOCAL_COMMAND)
         .envVariables(mapOf(
+            "OKD_PROJECT" to "",            // remove inherited OKD_PROJECT from parent process
+            "OKD_CLUSTER_DOMAIN" to "",     // remove inherited OKD_CLUSTER_DOMAIN from parent process
             "JAVA_HOME" to System.getProperty("java.home")
         ) + testGradleDSL.additionalEnvVariables)
         .redirectStandardOutput(System.out)

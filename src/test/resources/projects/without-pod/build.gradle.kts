@@ -4,6 +4,7 @@ plugins {
 }
 
 val okdProject = project.findProperty("okd-project") as String?
+val okdClusterDomain = project.findProperty("okd-cluster-domain") as String?
 val workDirectoryPath = project.findProperty("work-directory") as? String ?: ""
 val projectPrefix = project.findProperty("project-prefix") as? String ?: ""
 
@@ -13,6 +14,10 @@ ocTemplate {
 
     if (okdProject != null) {
         namespace.set(okdProject)
+    }
+
+    if (okdClusterDomain != null) {
+        clusterDomain.set(okdClusterDomain)
     }
 
     service("simple-pvc") {

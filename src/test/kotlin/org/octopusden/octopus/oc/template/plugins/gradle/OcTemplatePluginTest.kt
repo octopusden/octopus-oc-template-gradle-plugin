@@ -13,6 +13,7 @@ class OcTemplatePluginTest {
         const val DEPLOYMENT_PREFIX = "oc-template-ft"
         private val TASKS = arrayOf("clean", "build", "--info", "--stacktrace")
         private val OKD_PROJECT: String = System.getProperty("okdProject")
+        private val OKD_CLUSTER_DOMAIN: String = System.getProperty("okdClusterDomain")
         private val DOCKER_REGISTRY: String = System.getProperty("dockerRegistry")
         private val DEFAULT_PARAMETERS = arrayOf(
             "-Pokd-project=$OKD_PROJECT",
@@ -20,7 +21,7 @@ class OcTemplatePluginTest {
             "-Pproject-prefix=$DEPLOYMENT_PREFIX",
             "-Pdocker-registry=$DOCKER_REGISTRY"
         )
-        private val DEFAULT_ENV_VARIABLES = mapOf("OKD_CLUSTER_DOMAIN" to System.getProperty("okdClusterDomain"))
+        private val DEFAULT_ENV_VARIABLES = mapOf("OKD_CLUSTER_DOMAIN" to OKD_CLUSTER_DOMAIN)
     }
 
     @Test
@@ -44,7 +45,7 @@ class OcTemplatePluginTest {
             additionalArguments = arrayOf(
                 "-Pokd-project=$OKD_PROJECT",
                 "-Pwork-directory=$WORK_DIR",
-                "-Pproject-prefix=oc-template-ft"
+                "-Pproject-prefix=$DEPLOYMENT_PREFIX"
             )
             additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
@@ -82,7 +83,7 @@ class OcTemplatePluginTest {
             additionalArguments = arrayOf(
                 "-Pokd-project=$OKD_PROJECT",
                 "-Pwork-directory=$WORK_DIR",
-                "-Pproject-prefix=oc-template-ft"
+                "-Pproject-prefix=$DEPLOYMENT_PREFIX"
             )
             additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
@@ -92,16 +93,22 @@ class OcTemplatePluginTest {
         }
     }
 
+    /**
+     * Verifies that 'namespace' is resolved from environment variables,
+     * while 'clusterDomain' is resolved from properties.
+     */
     @Test
-    fun testNamespaceFromEnv() {
+    fun testResolvesConfigFromEnvAndProps() {
         val (instance, projectPath) = gradleProcessInstance {
             testProjectName = "projects/without-pod"
             tasks = TASKS
             additionalArguments = arrayOf(
+                "-Pokd-project=invalid-namespace",
                 "-Pwork-directory=$WORK_DIR",
-                "-Pproject-prefix=$DEPLOYMENT_PREFIX"
+                "-Pproject-prefix=$DEPLOYMENT_PREFIX",
+                "-Pokd-cluster-domain=$OKD_CLUSTER_DOMAIN"
             )
-            additionalEnvVariables = DEFAULT_ENV_VARIABLES + mapOf(
+            additionalEnvVariables = mapOf(
                 "OKD_PROJECT" to OKD_PROJECT
             )
         }
