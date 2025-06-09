@@ -52,6 +52,7 @@ class OcTaskConfiguration {
                 new OcTemplateServiceParametersDTO(
                     project.objects.property(String).value(serviceName),
                     ocTemplateSettings.namespace,
+                    ocTemplateSettings.webConsoleUrl,
                     serviceSetting.templateFile,
                     project.objects.mapProperty(String, String).value(getDefaultParameters() + serviceSetting.parameters.get()),
                     ocTemplateSettings.workDir,

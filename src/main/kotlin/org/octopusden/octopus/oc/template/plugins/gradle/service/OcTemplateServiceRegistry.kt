@@ -25,6 +25,7 @@ open class OcTemplateServiceRegistry @Inject constructor (
                 with(it.parameters) {
                     serviceName.set(config.serviceName)
                     namespace.set(config.namespace)
+                    webConsoleUrl.set(config.webConsoleUrl)
                     workDir.set(config.workDir)
                     templateFile.set(config.templateFile)
                     templateParameters.set(config.templateParameters)

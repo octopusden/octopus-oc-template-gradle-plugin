@@ -9,6 +9,7 @@ import org.octopusden.octopus.oc.template.plugins.gradle.service.OcTemplateServi
 data class OcTemplateServiceParametersDTO(
     override val serviceName: Property<String>,
     override val namespace: Property<String>,
+    override val webConsoleUrl: Property<String>,
     override val templateFile: RegularFileProperty,
     override val templateParameters: MapProperty<String, String>,
     override val workDir: DirectoryProperty,

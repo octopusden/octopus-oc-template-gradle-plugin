@@ -53,8 +53,9 @@ fun getTestParameter(envName: String, propertyName: String, defaultValue: String
 val testParameters by lazy {
     mapOf(
         "ocTemplateGradlePluginVersion" to project.version,
-        "okdClusterDomain" to getTestParameter("OKD_CLUSTER_DOMAIN", "okd.cluster-domain"),
         "okdProject" to getTestParameter("OKD_PROJECT", "okd.project"),
+        "okdClusterDomain" to getTestParameter("OKD_CLUSTER_DOMAIN", "okd.cluster-domain"),
+        "okdWebConsoleUrl" to getTestParameter("OKD_WEB_CONSOLE_URL", "okd.web-console-url"),
         "dockerRegistry" to getTestParameter("DOCKER_REGISTRY", "docker.registry")
     )
 }
@@ -74,7 +75,7 @@ artifactory {
             contextUrl = "$baseUrl/artifactory"
         }
         repository {
-            repoKey = System.getenv().getOrDefault("ARTIFACTORY_REPOSITORY_KEY", project.properties["artifactoryRepositoryKey"]).toString()
+            repoKey = "rnd-maven-dev-local"
             username = System.getenv().getOrDefault("ARTIFACTORY_DEPLOYER_USERNAME", project.properties["NEXUS_USER"]).toString()
             password = System.getenv().getOrDefault("ARTIFACTORY_DEPLOYER_PASSWORD", project.properties["NEXUS_PASSWORD"]).toString()
         }

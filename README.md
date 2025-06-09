@@ -24,6 +24,7 @@ ocTemplate {
     workDir.set(layout.buildDirectory.dir("oc-work")) // Stores generated resources/logs, default: build/oc-template
 
     clusterDomain("apps.ocpd.eq.openmind.org") // Can be set from env variable: OKD_CLUSTER_DOMAIN
+    webConsoleUrl("https://apps.ocpd.eq.openmind.org") // Optional, can be set from env variable: OKD_WEB_CONSOLE_URL
     prefix.set("ft") // Deployment prefix
     projectVersion.set("1.0.0") // Defaults to project.version; if not set, a unique snapshot version will be generated
     
@@ -129,3 +130,4 @@ To run the functional tests, ensure the following properties or environment vari
 - `docker.registry` or `DOCKER_REGISTRY`
 - `okd.project` or `OKD_PROJECT`
 - `okd.cluster-domain` or `OKD_CLUSTER_DOMAIN`
+- `okd.web-console-url` or `OKD_WEB_CONSOLE_URL`

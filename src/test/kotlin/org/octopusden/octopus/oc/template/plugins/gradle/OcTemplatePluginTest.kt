@@ -14,6 +14,7 @@ class OcTemplatePluginTest {
         private val TASKS = arrayOf("clean", "build", "--info", "--stacktrace")
         private val OKD_PROJECT: String = System.getProperty("okdProject")
         private val OKD_CLUSTER_DOMAIN: String = System.getProperty("okdClusterDomain")
+        private val OKD_WEB_CONSOLE_URL: String = System.getProperty("okdWebConsoleUrl")
         private val DOCKER_REGISTRY: String = System.getProperty("dockerRegistry")
         private val DEFAULT_PARAMETERS = arrayOf(
             "-Pokd-project=$OKD_PROJECT",
@@ -94,27 +95,35 @@ class OcTemplatePluginTest {
     }
 
     /**
-     * Verifies that 'namespace' is resolved from environment variables,
+     * Verifies that 'namespace' & 'webConsoleUrl' is resolved from environment variables,
      * while 'clusterDomain' is resolved from properties.
      */
     @Test
     fun testResolvesConfigFromEnvAndProps() {
         val (instance, projectPath) = gradleProcessInstance {
-            testProjectName = "projects/without-pod"
+            testProjectName = "projects/simple-project"
             tasks = TASKS
             additionalArguments = arrayOf(
                 "-Pokd-project=invalid-namespace",
                 "-Pwork-directory=$WORK_DIR",
                 "-Pproject-prefix=$DEPLOYMENT_PREFIX",
-                "-Pokd-cluster-domain=$OKD_CLUSTER_DOMAIN"
+                "-Pokd-cluster-domain=$OKD_CLUSTER_DOMAIN",
+                "-Pdocker-registry=$DOCKER_REGISTRY"
             )
             additionalEnvVariables = mapOf(
-                "OKD_PROJECT" to OKD_PROJECT
+                "OKD_PROJECT" to OKD_PROJECT,
+                "OKD_WEB_CONSOLE_URL" to OKD_WEB_CONSOLE_URL
             )
         }
         assertEquals(0, instance.exitCode)
         assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
-        assertThat(projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles()).isEmpty()
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).exists()
+        assertThat(instance.stdOut).anySatisfy {
+            assertThat(it).contains("Pod(s) ready on:")
+        }
+        assertThat(instance.stdOut).anySatisfy {
+            assertThat(it).contains("- $DEPLOYMENT_PREFIX-1-0-postgres: $OKD_WEB_CONSOLE_URL")
+        }
     }
 
     @Test
@@ -197,8 +206,26 @@ class OcTemplatePluginTest {
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).doesNotExist()
     }
 
-    private fun getLogFileName(serviceName: String): String {
-        return "$DEPLOYMENT_PREFIX-1-0-snapshot-$serviceName.log"
+    @Test
+    fun testProjectWithSnapshotVersion() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/without-version"
+            tasks = TASKS
+            additionalArguments = DEFAULT_PARAMETERS + arrayOf("-Pversion=1.0-SNAPSHOT")
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
+        }
+        assertEquals(0, instance.exitCode)
+        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
+        assertThat(
+            projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles {
+                    file -> file.name.startsWith(DEPLOYMENT_PREFIX) && file.name.endsWith("-snapshot-postgres.log")
+            }
+        ).hasSize(1)
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres", "1-0-snapshot")}")).doesNotExist()
+    }
+
+    private fun getLogFileName(serviceName: String, version: String? = "1-0"): String {
+        return "$DEPLOYMENT_PREFIX-$version-$serviceName.log"
     }
 
 }

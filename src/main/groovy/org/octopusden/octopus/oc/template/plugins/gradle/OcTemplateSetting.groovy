@@ -24,6 +24,7 @@ abstract class OcTemplateSetting {
     abstract DirectoryProperty getWorkDir()
 
     abstract Property<String> getClusterDomain()
+    abstract Property<String> getWebConsoleUrl()
     abstract Property<String> getPrefix()
     abstract Property<String> getProjectVersion()
 
@@ -45,7 +46,9 @@ abstract class OcTemplateSetting {
 
         String versionStr = project.version.toString()
         projectVersion.set(
-            (versionStr && versionStr != "unspecified") ? versionStr : generateDefaultVersion()
+            (versionStr && versionStr != "unspecified" && !versionStr.toLowerCase().endsWith("-snapshot"))
+                ? versionStr
+                : generateDefaultVersion()
         )
 
         period.set(DEFAULT_WAIT_PERIOD)
@@ -125,6 +128,7 @@ abstract class OcTemplateSetting {
     private void applyEnvVariableOverrides(OcTemplateSetting parent = null) {
         project.afterEvaluate {
             applyEnvOverride("OKD_CLUSTER_DOMAIN", clusterDomain, parent?.clusterDomain?.get())
+            applyEnvOverride("OKD_WEB_CONSOLE_URL", webConsoleUrl, parent?.webConsoleUrl?.isPresent() ? parent?.webConsoleUrl?.get(): null)
             applyEnvOverride("OKD_PROJECT", namespace, parent?.namespace?.get())
         }
     }
