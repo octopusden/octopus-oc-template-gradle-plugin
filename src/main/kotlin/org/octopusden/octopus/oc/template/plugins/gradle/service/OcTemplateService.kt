@@ -59,7 +59,7 @@ abstract class OcTemplateService @Inject constructor(
     fun process() {
         execOperations.exec {
             it.setCommandLine(
-                "/opt/homebrew/bin/oc", "process", "--local", "-o", "yaml",
+                "oc", "process", "--local", "-o", "yaml",
                 "-f", templateFile.absolutePath,
                 *parameters.templateParameters.get().flatMap { parameter ->
                     listOf("-p", "${parameter.key}=${parameter.value}")
@@ -72,7 +72,7 @@ abstract class OcTemplateService @Inject constructor(
     fun create() {
         delete()
         execOperations.exec {
-            it.setCommandLine("/opt/homebrew/bin/oc", "create", "-n", namespace, "-f", processedFile.absolutePath)
+            it.setCommandLine("oc", "create", "-n", namespace, "-f", processedFile.absolutePath)
         }.assertNormalExitValue()
         updateCreatedResources()
     }
@@ -100,7 +100,7 @@ abstract class OcTemplateService @Inject constructor(
             Thread.sleep(period)
             output = ByteArrayOutputStream()
             execOperations.exec {
-                it.commandLine("/opt/homebrew/bin/oc", "get", "pod", *podResources.toTypedArray(), "-n", namespace, "-o", jsonPath)
+                it.commandLine("oc", "get", "pod", *podResources.toTypedArray(), "-n", namespace, "-o", jsonPath)
                 it.standardOutput = output
             }
             val outputString = String(output.toByteArray())
@@ -119,7 +119,7 @@ abstract class OcTemplateService @Inject constructor(
     fun logs() {
         podResources.forEach { resource ->
             execOperations.exec {
-                it.setCommandLine("/opt/homebrew/bin/oc", "logs", "-n", namespace, resource)
+                it.setCommandLine("oc", "logs", "-n", namespace, resource)
                 it.standardOutput = logs.file("$resource.log").asFile.outputStream()
             }
         }
@@ -127,7 +127,7 @@ abstract class OcTemplateService @Inject constructor(
 
     fun delete() {
         execOperations.exec {
-            it.setCommandLine("/opt/homebrew/bin/oc", "delete", "--ignore-not-found", "-n", namespace, "-f", processedFile.absolutePath)
+            it.setCommandLine("oc", "delete", "--ignore-not-found", "-n", namespace, "-f", processedFile.absolutePath)
         }.assertNormalExitValue()
         clearCreatedResources()
     }
@@ -135,7 +135,7 @@ abstract class OcTemplateService @Inject constructor(
     private fun updateCreatedResources() {
         val output = ByteArrayOutputStream()
         execOperations.exec {
-            it.setCommandLine("/opt/homebrew/bin/oc", "get", "pods,route", "-n", namespace, "-o", "name")
+            it.setCommandLine("oc", "get", "pods,route", "-n", namespace, "-o", "name")
             it.standardOutput = output
         }
         val outputString = String(output.toByteArray())
