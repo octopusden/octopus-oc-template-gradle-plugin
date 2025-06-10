@@ -1,4 +1,6 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import java.time.Duration
 
 plugins {
@@ -32,16 +34,14 @@ tasks.named<GroovyCompile>("compileGroovy") {
     classpath += files(tasks.named<KotlinCompile>("compileKotlin").get().destinationDirectory)
 }
 
-java {
-    targetCompatibility = JavaVersion.VERSION_1_8
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    withJavadocJar()
-    withSourcesJar()
+tasks.withType<KotlinJvmCompile>().configureEach {
+    compilerOptions {
+        suppressWarnings = true
+        jvmTarget = JvmTarget.JVM_1_8
+    }
 }
 
-kotlin {
-    jvmToolchain(8)
-}
+java.targetCompatibility = JavaVersion.VERSION_1_8
 
 gradlePlugin {
     plugins {
