@@ -1,4 +1,6 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import java.time.Duration
 
 plugins {
@@ -31,6 +33,15 @@ tasks.named<GroovyCompile>("compileGroovy") {
     dependsOn(tasks.named("compileKotlin"))
     classpath += files(tasks.named<KotlinCompile>("compileKotlin").get().destinationDirectory)
 }
+
+tasks.withType<KotlinJvmCompile>().configureEach {
+    compilerOptions {
+        suppressWarnings = true
+        jvmTarget = JvmTarget.JVM_1_8
+    }
+}
+
+java.targetCompatibility = JavaVersion.VERSION_1_8
 
 gradlePlugin {
     plugins {
@@ -102,7 +113,7 @@ nexusPublishing {
 
 publishing {
     publications {
-        create<MavenPublication>("maven") {
+        withType<MavenPublication> {
             pom {
                 name.set(project.name)
                 description.set(project.description)
@@ -134,7 +145,7 @@ signing {
     val signingKey: String? by project
     val signingPassword: String? by project
     useInMemoryPgpKeys(signingKey, signingPassword)
-    sign(publishing.publications["maven"])
+    sign(publishing.publications)
 }
 
 project.tasks.findByPath("publish")?.dependsOn(":artifactoryPublish")
