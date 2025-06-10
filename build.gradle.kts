@@ -39,6 +39,10 @@ java {
     withSourcesJar()
 }
 
+kotlin {
+    jvmToolchain(8)
+}
+
 gradlePlugin {
     plugins {
         create("OcTemplateGradlePlugin") {
