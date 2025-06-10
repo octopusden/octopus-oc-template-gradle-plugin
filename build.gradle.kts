@@ -41,7 +41,11 @@ tasks.withType<KotlinJvmCompile>().configureEach {
     }
 }
 
-java.targetCompatibility = JavaVersion.VERSION_1_8
+java {
+    withSourcesJar()
+    withJavadocJar()
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
 
 gradlePlugin {
     plugins {
