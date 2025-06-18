@@ -44,12 +44,7 @@ abstract class OcTemplateSetting {
         enabled.set(true)
         workDir.set(project.layout.buildDirectory.dir("oc-template"))
 
-        String versionStr = project.version.toString()
-        projectVersion.set(
-            (versionStr && versionStr != "unspecified" && !versionStr.toLowerCase().endsWith("-snapshot"))
-                ? versionStr
-                : generateDefaultVersion()
-        )
+        projectVersion.set(project.version.toString())
 
         period.set(DEFAULT_WAIT_PERIOD)
         attempts.set(DEFAULT_WAIT_ATTEMPTS)
@@ -112,12 +107,6 @@ abstract class OcTemplateSetting {
 
     String getOkdHost(String serviceName) {
         return "${getPod(serviceName)}-route-${namespace.get()}.${clusterDomain.get()}"
-    }
-
-    private static String generateDefaultVersion() {
-        CRC32 crc = new CRC32()
-        crc.update(InetAddress.getLocalHost().hostName.getBytes())
-        return "${crc.getValue()}-snapshot"
     }
 
     /**
