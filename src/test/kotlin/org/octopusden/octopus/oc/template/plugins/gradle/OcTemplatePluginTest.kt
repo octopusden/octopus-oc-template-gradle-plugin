@@ -122,7 +122,7 @@ class OcTemplatePluginTest {
             assertThat(it).contains("Pod(s) ready on:")
         }
         assertThat(instance.stdOut).anySatisfy {
-            assertThat(it).contains("- $DEPLOYMENT_PREFIX-1-0-postgres: $OKD_WEB_CONSOLE_URL")
+            assertThat(it).contains("- $DEPLOYMENT_PREFIX-1-0-snapshot-postgres: $OKD_WEB_CONSOLE_URL")
         }
     }
 
@@ -188,44 +188,8 @@ class OcTemplatePluginTest {
         }
     }
 
-    @Test
-    fun testProjectWithoutVersion() {
-        val (instance, projectPath) = gradleProcessInstance {
-            testProjectName = "projects/without-version"
-            tasks = TASKS
-            additionalArguments = DEFAULT_PARAMETERS
-            additionalEnvVariables = DEFAULT_ENV_VARIABLES
-        }
-        assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
-        assertThat(
-            projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles {
-                    file -> file.name.startsWith(DEPLOYMENT_PREFIX) && file.name.endsWith("-snapshot-postgres.log")
-            }
-        ).hasSize(1)
-        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).doesNotExist()
-    }
-
-    @Test
-    fun testProjectWithSnapshotVersion() {
-        val (instance, projectPath) = gradleProcessInstance {
-            testProjectName = "projects/without-version"
-            tasks = TASKS
-            additionalArguments = DEFAULT_PARAMETERS + arrayOf("-Pversion=1.0-SNAPSHOT")
-            additionalEnvVariables = DEFAULT_ENV_VARIABLES
-        }
-        assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
-        assertThat(
-            projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles {
-                    file -> file.name.startsWith(DEPLOYMENT_PREFIX) && file.name.endsWith("-snapshot-postgres.log")
-            }
-        ).hasSize(1)
-        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres", "1-0-snapshot")}")).doesNotExist()
-    }
-
-    private fun getLogFileName(serviceName: String, version: String? = "1-0"): String {
-        return "$DEPLOYMENT_PREFIX-$version-$serviceName.log"
+    private fun getLogFileName(serviceName: String): String {
+        return "$DEPLOYMENT_PREFIX-1-0-snapshot-$serviceName.log"
     }
 
 }
