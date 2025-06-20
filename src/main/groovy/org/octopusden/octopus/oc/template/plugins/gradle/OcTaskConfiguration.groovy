@@ -18,30 +18,32 @@ import javax.inject.Provider
 
 @CompileStatic
 class OcTaskConfiguration {
-
     final OcTemplateSetting ocTemplateSettings
     final Project project
-    final String settingName
-
-    private TaskProvider<OcProcessTask> ocProcessTask
-    private TaskProvider<OcCreateTask> ocCreateTask
-    private TaskProvider<OcWaitTask> ocWaitTask
-    private TaskProvider<OcLogsTask> ocLogsTask
-    private TaskProvider<OcDeleteTask> ocDeleteTask
 
     private final OcTemplateServiceDependencyGraph serviceDependencyGraph
+    private final TaskProvider<OcProcessTask> ocProcessTask
+    private final TaskProvider<OcCreateTask> ocCreateTask
+    private final TaskProvider<OcWaitTask> ocWaitTask
+    private final TaskProvider<OcLogsTask> ocLogsTask
+    private final TaskProvider<OcDeleteTask> ocDeleteTask
 
     OcTaskConfiguration(OcTemplateSetting ocTemplateSettings, Project project, String name) {
         this.ocTemplateSettings = ocTemplateSettings
         this.project = project
-        this.settingName = name
+
         this.serviceDependencyGraph = new OcTemplateServiceDependencyGraph()
+        this.ocProcessTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.PROCESS), OcProcessTask)
+        this.ocCreateTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.CREATE), OcCreateTask)
+        this.ocWaitTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.WAIT), OcWaitTask)
+        this.ocLogsTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.LOGS), OcLogsTask)
+        this.ocDeleteTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.DELETE), OcDeleteTask)
 
         project.afterEvaluate {
             if (ocTemplateSettings.enabled.get()) {
                 registerBuildServices()
                 registerServiceDependencies()
-                registerTasks()
+                configureTasks()
             }
         }
     }
@@ -69,29 +71,25 @@ class OcTaskConfiguration {
         }
     }
 
-    private void registerTasks() {
-        this.ocProcessTask = project.tasks.register(generateTaskName(settingName, OcTemplateTaskType.PROCESS), OcProcessTask) { task ->
+    private void configureTasks() {
+        ocProcessTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
         }
-
-        this.ocCreateTask = project.tasks.register(generateTaskName(settingName, OcTemplateTaskType.CREATE), OcCreateTask) { task ->
+        ocCreateTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
             task.dependsOn(ocProcessTask)
         }
-
-        this.ocWaitTask = project.tasks.register(generateTaskName(settingName, OcTemplateTaskType.WAIT), OcWaitTask) { task ->
+        ocWaitTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
         }
-
-        this.ocLogsTask = project.tasks.register(generateTaskName(settingName, OcTemplateTaskType.LOGS), OcLogsTask) { task ->
+        ocLogsTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
         }
-
-        this.ocDeleteTask = project.tasks.register(generateTaskName(settingName, OcTemplateTaskType.DELETE), OcDeleteTask) { task ->
+        ocDeleteTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
         }
