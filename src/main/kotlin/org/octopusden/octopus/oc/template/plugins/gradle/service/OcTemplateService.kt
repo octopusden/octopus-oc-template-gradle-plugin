@@ -28,6 +28,7 @@ abstract class OcTemplateService @Inject constructor(
         val workDir: DirectoryProperty
         val period: Property<Long>
         val attempts: Property<Int>
+        val autoCleanup: Property<Boolean>
     }
 
     private val serviceName = parameters.serviceName.get()
@@ -156,7 +157,11 @@ abstract class OcTemplateService @Inject constructor(
     }
 
     override fun close() {
-        delete()
+        if (parameters.autoCleanup.getOrElse(true)) {
+            delete()
+        } else {
+            logger.info("Skipping cleanup of created resources (autoCleanup=false)")
+        }
     }
 
 }

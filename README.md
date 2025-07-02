@@ -34,6 +34,8 @@ ocTemplate {
     // Optional pods readiness settings
     period.set(1200L)  // Delay (ms) between readiness checks, default: 15000L
     attempts.set(20)   // Max number of check attempts, default: 20
+    
+    autoCleanup.set(true)  // Auto cleanup of created resources, default: true
 
     // Register services
     service("database") {

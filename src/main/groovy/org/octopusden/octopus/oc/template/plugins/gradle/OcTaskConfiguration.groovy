@@ -59,7 +59,8 @@ class OcTaskConfiguration {
                     project.objects.mapProperty(String, String).value(getDefaultParameters() + serviceSetting.parameters.get()),
                     ocTemplateSettings.workDir,
                     ocTemplateSettings.period,
-                    ocTemplateSettings.attempts
+                    ocTemplateSettings.attempts,
+                    ocTemplateSettings.autoCleanup
                 )) as Provider<OcTemplateService>
             serviceDependencyGraph.add(serviceName, serviceSetting.dependsOn.get())
         }
