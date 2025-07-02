@@ -31,6 +31,7 @@ open class OcTemplateServiceRegistry @Inject constructor (
                     templateParameters.set(config.templateParameters)
                     attempts.set(config.attempts)
                     period.set(config.period)
+                    autoCleanup.set(config.autoCleanup)
                 }
             }
         }
