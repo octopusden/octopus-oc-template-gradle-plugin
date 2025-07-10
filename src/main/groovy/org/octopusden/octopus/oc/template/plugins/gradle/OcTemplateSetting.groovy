@@ -8,7 +8,6 @@ import org.gradle.api.Task
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.TaskProvider
-import java.util.zip.CRC32
 
 @CompileStatic
 abstract class OcTemplateSetting {
@@ -30,6 +29,7 @@ abstract class OcTemplateSetting {
 
     abstract Property<Long> getPeriod()
     abstract Property<Integer> getAttempts()
+    abstract Property<Boolean> getAutoCleanup()
 
     private String nestedName
 
@@ -48,6 +48,7 @@ abstract class OcTemplateSetting {
 
         period.set(DEFAULT_WAIT_PERIOD)
         attempts.set(DEFAULT_WAIT_ATTEMPTS)
+        autoCleanup.set(true)
 
         applyEnvVariableOverrides()
 
