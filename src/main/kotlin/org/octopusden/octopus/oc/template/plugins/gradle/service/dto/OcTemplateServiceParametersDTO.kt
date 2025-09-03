@@ -14,5 +14,6 @@ data class OcTemplateServiceParametersDTO(
     override val templateParameters: MapProperty<String, String>,
     override val workDir: DirectoryProperty,
     override val period: Property<Long>,
-    override val attempts: Property<Int>
+    override val attempts: Property<Int>,
+    override val autoCleanup: Property<Boolean>,
 ): OcTemplateService.Parameters
