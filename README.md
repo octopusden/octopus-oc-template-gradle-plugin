@@ -5,7 +5,6 @@ This Gradle plugin provides a convenient way to interact with OKD/OpenShift temp
 This plugin automatically generates Gradle tasks to manage OpenShift resources based on your registered services & templates:
 - `ocProcess` - Processes all registered OpenShift templates with parameters
 - `ocCreate` - Creates resources from processed templates for all services
-- `ocWaitReadiness` - Waits for pods (defined in services) to become ready
 - `ocLogs` - Fetches logs from pods for all services
 - `ocDelete` - Deletes all created resources for cleanup
 
