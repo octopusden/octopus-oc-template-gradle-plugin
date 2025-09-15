@@ -12,8 +12,6 @@ import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcCreateTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcDeleteTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcLogsTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcProcessTask
-import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcWaitTask
-
 import javax.inject.Provider
 
 @CompileStatic
@@ -24,7 +22,6 @@ class OcTaskConfiguration {
     private final OcTemplateServiceDependencyGraph serviceDependencyGraph
     private final TaskProvider<OcProcessTask> ocProcessTask
     private final TaskProvider<OcCreateTask> ocCreateTask
-    private final TaskProvider<OcWaitTask> ocWaitTask
     private final TaskProvider<OcLogsTask> ocLogsTask
     private final TaskProvider<OcDeleteTask> ocDeleteTask
 
@@ -35,7 +32,6 @@ class OcTaskConfiguration {
         this.serviceDependencyGraph = new OcTemplateServiceDependencyGraph()
         this.ocProcessTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.PROCESS), OcProcessTask)
         this.ocCreateTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.CREATE), OcCreateTask)
-        this.ocWaitTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.WAIT), OcWaitTask)
         this.ocLogsTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.LOGS), OcLogsTask)
         this.ocDeleteTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.DELETE), OcDeleteTask)
 
@@ -81,10 +77,6 @@ class OcTaskConfiguration {
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
             task.dependsOn(ocProcessTask)
-        }
-        ocWaitTask.configure { task ->
-            task.serviceNames.set(serviceDependencyGraph.getOrdered())
-            task.serviceRegistry.set(getServiceRegistry())
         }
         ocLogsTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
