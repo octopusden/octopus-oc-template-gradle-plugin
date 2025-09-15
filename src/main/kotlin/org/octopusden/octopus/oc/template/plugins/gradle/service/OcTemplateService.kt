@@ -49,7 +49,7 @@ abstract class OcTemplateService @Inject constructor(
     init {
         with(parameters.workDir.get()) {
             asFile.mkdirs()
-            processedFile = file("${templateFile.nameWithoutExtension}.yaml").asFile
+            processedFile = file("${serviceName}.yaml").asFile
             logs = dir("logs").also {
                 it.asFile.mkdir()
             }

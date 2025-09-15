@@ -34,7 +34,7 @@ class OcTemplatePluginTest {
             additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/postgres.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).exists()
     }
 
@@ -51,7 +51,7 @@ class OcTemplatePluginTest {
             additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/simple-pvc.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles()).isEmpty()
     }
 
@@ -68,7 +68,7 @@ class OcTemplatePluginTest {
             additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/simple-rest.yaml")).exists()
         assertThat(
             projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles {
                 file -> file.name.startsWith(getLogFileName("simple-rest").removeSuffix(".log"))
@@ -116,7 +116,7 @@ class OcTemplatePluginTest {
             )
         }
         assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/postgres.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).exists()
         assertThat(instance.stdOut).anySatisfy {
             assertThat(it).contains("Pod(s) ready on:")
@@ -156,7 +156,7 @@ class OcTemplatePluginTest {
         assertThat(instance.stdErr).anySatisfy {
             assertThat(it).contains("Pods readiness check attempts exceeded")
         }
-        assertThat(projectPath.resolve("build/$WORK_DIR/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/postgres.yaml")).exists()
     }
 
     @Test
@@ -168,9 +168,9 @@ class OcTemplatePluginTest {
             additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertEquals(0, instance.exitCode)
-        assertThat(projectPath.resolve("build/$WORK_DIR/service1/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/service1/postgres-1.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/service1/logs/${getLogFileName("postgres-1")}")).exists()
-        assertThat(projectPath.resolve("build/$WORK_DIR/service2/template.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/service2/postgres-2.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/service2/logs/${getLogFileName("postgres-2")}")).exists()
     }
 
