@@ -188,6 +188,21 @@ class OcTemplatePluginTest {
         }
     }
 
+    @Test
+    fun testServicesFromSingleTemplate() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/services-from-single-template"
+            tasks = TASKS
+            additionalArguments = DEFAULT_PARAMETERS
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
+        }
+        assertEquals(0, instance.exitCode)
+        assertThat(projectPath.resolve("build/$WORK_DIR/postgres-1.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres-1")}")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/postgres-2.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres-2")}")).exists()
+    }
+
     private fun getLogFileName(serviceName: String): String {
         return "$DEPLOYMENT_PREFIX-1-0-snapshot-$serviceName.log"
     }

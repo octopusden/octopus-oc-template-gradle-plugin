@@ -1,0 +1,71 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: postgres
+objects:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${DEPLOYMENT_PREFIX}-${POD_NAME}-pvc
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+      volumeMode: Filesystem
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: ${DEPLOYMENT_PREFIX}-${POD_NAME}
+      labels:
+        app.kubernetes.io/name: ${DEPLOYMENT_PREFIX}-${POD_NAME}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: ${DEPLOYMENT_PREFIX}-${POD_NAME}
+          image: ${DOCKER_REGISTRY}/postgres:latest
+          env:
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_HOST_AUTH_METHOD
+              value: trust
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - exec pg_isready -U postgres
+            periodSeconds: 10
+          volumeMounts:
+            - name: ${DEPLOYMENT_PREFIX}-${POD_NAME}-data
+              mountPath: /var/lib/postgresql/
+      volumes:
+        - name: ${DEPLOYMENT_PREFIX}-${POD_NAME}-data
+          persistentVolumeClaim:
+            claimName: ${DEPLOYMENT_PREFIX}-${POD_NAME}-pvc
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: ${DEPLOYMENT_PREFIX}-${POD_NAME}-service
+    spec:
+      ports:
+        - port: 5432
+          protocol: TCP
+          targetPort: 5432
+      selector:
+        app.kubernetes.io/name: ${DEPLOYMENT_PREFIX}-${POD_NAME}
+parameters:
+  - description: Docker registry
+    name: DOCKER_REGISTRY
+    required: true
+  - description: Pod name
+    name: POD_NAME
+    required: false
+    value: postgres
+  - description: DEPLOYMENT_PREFIX
+    name: DEPLOYMENT_PREFIX
+    required: true
