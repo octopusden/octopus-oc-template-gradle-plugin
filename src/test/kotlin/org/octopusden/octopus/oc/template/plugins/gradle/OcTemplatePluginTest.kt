@@ -149,7 +149,7 @@ class OcTemplatePluginTest {
         val (instance, projectPath) = gradleProcessInstance {
             testProjectName = "projects/failed-resource"
             tasks = TASKS
-            additionalArguments = DEFAULT_PARAMETERS + arrayOf("-Pokd-wait-attempts=0")
+            additionalArguments = DEFAULT_PARAMETERS + arrayOf("-Pokd-wait-attempts=3")
             additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
         assertNotEquals(0, instance.exitCode)
