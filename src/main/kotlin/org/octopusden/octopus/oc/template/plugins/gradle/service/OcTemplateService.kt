@@ -68,7 +68,7 @@ abstract class OcTemplateService @Inject constructor(
                 .flatMap { parameter ->
                     val key = parameter.key
                     var value = parameter.value
-                    if (osType.contains("Win")) {
+                    if (osType.lowercase().contains("win")) {
                         value = value.replace("\"", "\\\"")
                     }
                     listOf("-p", "$key=$value")
