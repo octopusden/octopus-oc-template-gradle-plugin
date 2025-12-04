@@ -1,5 +1,6 @@
 package org.octopusden.octopus.oc.template.plugins.gradle.service
 
+import javax.inject.Inject
 import org.gradle.api.file.Directory
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
@@ -13,7 +14,6 @@ import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.OutputStream
-import javax.inject.Inject
 
 abstract class OcTemplateService @Inject constructor(
     private val execOperations: ExecOperations
@@ -44,6 +44,10 @@ abstract class OcTemplateService @Inject constructor(
     private val podResources = mutableListOf<String>()
     private val routeResources = mutableListOf<String>()
 
+    private val osType by lazy {
+        System.getProperty("os.name")
+    }
+
     private val logger: Logger = LoggerFactory.getLogger(OcTemplateService::class.java)
 
     init {
@@ -59,12 +63,20 @@ abstract class OcTemplateService @Inject constructor(
 
     fun process() {
         execOperations.exec {
+            val parameters = parameters.templateParameters
+                .get()
+                .flatMap { parameter ->
+                    val key = parameter.key
+                    var value = parameter.value
+                    if (osType.contains("Win")) {
+                        value = value.replace("\"", "\\\"")
+                    }
+                    listOf("-p", "$key=$value")
+                }.toTypedArray()
             it.setCommandLine(
                 "oc", "process", "--local", "-o", "yaml",
                 "-f", templateFile.absolutePath,
-                *parameters.templateParameters.get().flatMap { parameter ->
-                    listOf("-p", "${parameter.key}=${parameter.value.replace("\"", "\\\"")}")
-                }.toTypedArray()
+                *parameters
             )
             it.standardOutput = processedFile.outputStream()
         }.assertNormalExitValue()
