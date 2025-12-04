@@ -63,7 +63,7 @@ abstract class OcTemplateService @Inject constructor(
                 "oc", "process", "--local", "-o", "yaml",
                 "-f", templateFile.absolutePath,
                 *parameters.templateParameters.get().flatMap { parameter ->
-                    listOf("-p", "${parameter.key}=${parameter.value}")
+                    listOf("-p", "${parameter.key}=${parameter.value.replace("\"", "\\\"")}")
                 }.toTypedArray()
             )
             it.standardOutput = processedFile.outputStream()
