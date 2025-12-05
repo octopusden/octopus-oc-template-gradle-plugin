@@ -13,7 +13,7 @@ objects:
       restartPolicy: Never
       containers:
         - name: postgres-db
-          image: ${DOCKER_REGISTRY}/postgres:latest
+          image: ${DOCKER_REGISTRY}/postgres:not_exists
           env:
             - name: POSTGRES_DB
               value: postgres
