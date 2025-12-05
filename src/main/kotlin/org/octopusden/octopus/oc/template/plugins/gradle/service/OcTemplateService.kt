@@ -63,20 +63,15 @@ abstract class OcTemplateService @Inject constructor(
 
     fun process() {
         execOperations.exec {
-            val parameters = parameters.templateParameters
-                .get()
-                .flatMap { parameter ->
-                    val key = parameter.key
-                    var value = parameter.value
-                    if (osType.lowercase().contains("win")) {
-                        value = value.replace("\"", "\\\"")
-                    }
-                    listOf("-p", "$key=$value")
-                }.toTypedArray()
             it.setCommandLine(
                 "oc", "process", "--local", "-o", "yaml",
                 "-f", templateFile.absolutePath,
-                *parameters
+                *parameters.templateParameters.get().flatMap { parameter ->
+                    val value = if (osType.lowercase().contains("win")) {
+                        parameter.value.replace("\"", "\\\"")
+                    } else parameter.value
+                    listOf("-p", "${parameter.key}=$value")
+                }.toTypedArray()
             )
             it.standardOutput = processedFile.outputStream()
         }.assertNormalExitValue()
