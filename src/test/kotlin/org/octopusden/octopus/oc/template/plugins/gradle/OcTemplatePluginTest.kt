@@ -203,6 +203,27 @@ class OcTemplatePluginTest {
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres-2")}")).exists()
     }
 
+
+    @Test
+    fun testPodReadinessLogMessages() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/simple-project"
+            tasks = TASKS
+            additionalArguments = DEFAULT_PARAMETERS
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
+        }
+        assertEquals(0, instance.exitCode)
+        // Verify readiness check messages appear in output
+        assertThat(instance.stdOut).anySatisfy {
+            assertThat(it).contains("Waiting for pod(s) with prefix")
+        }
+        assertThat(instance.stdOut).anySatisfy {
+            assertThat(it).contains(">> All pods are running and ready")
+        }
+        assertThat(projectPath.resolve("build/$WORK_DIR/postgres.yaml")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).exists()
+    }
+
     private fun getLogFileName(serviceName: String): String {
         return "$DEPLOYMENT_PREFIX-1-0-snapshot-$serviceName.log"
     }
