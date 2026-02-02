@@ -85,6 +85,9 @@ class OcTaskConfiguration {
         ocDeleteTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
+            // mustRunAfter ensures logs run before delete when both are scheduled (e.g., as finalizers)
+            // but doesn't force dependency when ocDelete is run independently
+            task.mustRunAfter(ocLogsTask)
         }
     }
 

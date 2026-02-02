@@ -13,7 +13,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.OutputStream
 
 abstract class OcTemplateService @Inject constructor(
     private val execOperations: ExecOperations
@@ -62,19 +61,28 @@ abstract class OcTemplateService @Inject constructor(
     }
 
     fun process() {
-        execOperations.exec {
+        val errorOutput = ByteArrayOutputStream()
+        val result = execOperations.exec {
             it.setCommandLine(
                 "oc", "process", "--local", "-o", "yaml",
                 "-f", templateFile.absolutePath,
                 *parameters.templateParameters.get().flatMap { parameter ->
-                    val value = if (osType.lowercase().contains("win")) {
-                        parameter.value.replace("\"", "\\\"")
-                    } else parameter.value
-                    listOf("-p", "${parameter.key}=$value")
+                    listOf("-p", "${parameter.key}=${parameter.value}")
                 }.toTypedArray()
             )
             it.standardOutput = processedFile.outputStream()
-        }.assertNormalExitValue()
+            it.errorOutput = errorOutput
+            it.isIgnoreExitValue = true
+        }
+
+        if (result.exitValue != 0) {
+            val errorMessage = String(errorOutput.toByteArray())
+            logger.error("oc process command failed with exit code ${result.exitValue}")
+            logger.error("Error output: $errorMessage")
+            logger.error("Template file: ${templateFile.absolutePath}")
+            logger.error("Parameters: ${parameters.templateParameters.get()}")
+            throw Exception("oc process failed: $errorMessage")
+        }
     }
 
     fun create() {
@@ -86,36 +94,69 @@ abstract class OcTemplateService @Inject constructor(
     }
 
     fun waitReadiness() {
-        if (podResources.isEmpty()) {
-            logger.warn("No pod resources found to check for readiness")
-        } else {
-            waitPodsReadiness()
-        }
-    }
-
-    private fun waitPodsReadiness() {
         var ready = false
         var counter = 0
-        var output: OutputStream
 
-        val jsonPath = if (podResources.size == 1) {
-            "jsonpath='{.status.containerStatuses[0].ready}'"
-        } else {
-            "jsonpath='{.items[*].status.containerStatuses[0].ready}'"
-        }
+        logger.info("Waiting for pod(s) with prefix '$deploymentPrefix-$serviceName' to be ready...")
 
         while (!ready && counter++ < attempts) {
             Thread.sleep(period)
-            output = ByteArrayOutputStream()
-            execOperations.exec {
-                it.commandLine("oc", "get", "pod", *podResources.toTypedArray(), "-n", namespace, "-o", jsonPath)
-                it.standardOutput = output
+
+            // Refresh pod list on each check to handle Deployments that create pods asynchronously
+            if (podResources.isEmpty()) {
+                updateCreatedResources()
+                if (podResources.isEmpty()) {
+                    logger.info(">> No pods found yet, retrying...")
+                    continue
+                } else {
+                    logger.info(">> Found ${podResources.size} pod(s): ${podResources.joinToString(", ")}")
+                }
             }
-            val outputString = String(output.toByteArray())
-            logger.info(">> Check pods readiness status: $outputString")
-            ready = !outputString.contains("false")
+
+            // Check each pod individually by name
+            val allPodsReady = podResources.all { podName ->
+                val output = ByteArrayOutputStream()
+                val result = execOperations.exec {
+                    it.commandLine("oc", "get", "pod", podName, "-n", namespace,
+                        "-o", "jsonpath='{.status.phase}:{.status.containerStatuses[0].ready}:{.status.containerStatuses[0].started}'")
+                    it.standardOutput = output
+                    it.isIgnoreExitValue = true
+                }
+
+                if (result.exitValue == 0) {
+                    val outputString = String(output.toByteArray()).trim().removeSurrounding("'")
+                    logger.info(">> Pod '$podName' status: $outputString")
+
+                    if (outputString.isNotEmpty()) {
+                        val parts = outputString.split(":")
+                        // Check: phase == Running, ready == true, started == true
+                        parts.size >= 3 &&
+                            parts[0] == "Running" &&
+                            parts[1] == "true" &&
+                            parts[2] == "true"
+                    } else {
+                        logger.info(">> Pod '$podName' status not available yet")
+                        false
+                    }
+                } else {
+                    logger.info(">> Pod '$podName' not found")
+                    false
+                }
+            }
+
+            if (allPodsReady) {
+                ready = true
+                logger.info(">> All pods are running and ready")
+            } else {
+                logger.info(">> Pods not fully ready yet, waiting...")
+            }
         }
         if (!ready) {
+            // If no pods were ever found, that's OK (e.g., PVC-only templates)
+            if (podResources.isEmpty()) {
+                logger.info("No pods found for this service - skipping readiness check")
+                return
+            }
             throw Exception("Pods readiness check attempts exceeded")
         }
         if (parameters.webConsoleUrl.isPresent) {
@@ -126,9 +167,10 @@ abstract class OcTemplateService @Inject constructor(
 
     fun logs() {
         podResources.forEach { resource ->
-            execOperations.exec {
+            val result = execOperations.exec {
                 it.setCommandLine("oc", "logs", "-n", namespace, resource)
                 it.standardOutput = logs.file("$resource.log").asFile.outputStream()
+                it.isIgnoreExitValue = true
             }
         }
     }
