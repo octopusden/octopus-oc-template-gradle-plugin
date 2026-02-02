@@ -34,7 +34,7 @@ abstract class OcTemplateSetting {
     private String nestedName
 
     static final Long DEFAULT_WAIT_PERIOD = 15000L // 15 seconds
-    static final Integer DEFAULT_WAIT_ATTEMPTS = 20
+    static final Integer DEFAULT_WAIT_ATTEMPTS = 40 // ~10 minutes
 
     @Inject
     OcTemplateSetting(Project project, String name = "", String parentName = "") {
