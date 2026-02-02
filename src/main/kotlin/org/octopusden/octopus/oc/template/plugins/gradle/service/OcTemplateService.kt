@@ -96,6 +96,8 @@ abstract class OcTemplateService @Inject constructor(
     fun waitReadiness() {
         var ready = false
         var counter = 0
+        var consecutiveNoPodChecks = 0
+        val maxConsecutiveNoPodChecks = 3  // Exit early if no pods after 3 checks
 
         logger.info("Waiting for pod(s) with prefix '$deploymentPrefix-$serviceName' to be ready...")
 
@@ -106,9 +108,17 @@ abstract class OcTemplateService @Inject constructor(
             if (podResources.isEmpty()) {
                 updateCreatedResources()
                 if (podResources.isEmpty()) {
-                    logger.info(">> No pods found yet, retrying...")
+                    consecutiveNoPodChecks++
+                    logger.info(">> No pods found yet, retrying... (${consecutiveNoPodChecks}/${maxConsecutiveNoPodChecks})")
+
+                    // Early exit: if no pods found after several checks, this template likely doesn't create pods
+                    if (consecutiveNoPodChecks >= maxConsecutiveNoPodChecks) {
+                        logger.info("No pods found after $maxConsecutiveNoPodChecks checks - skipping readiness check")
+                        return
+                    }
                     continue
                 } else {
+                    consecutiveNoPodChecks = 0  // Reset counter when pods are found
                     logger.info(">> Found ${podResources.size} pod(s): ${podResources.joinToString(", ")}")
                 }
             }
@@ -151,6 +161,7 @@ abstract class OcTemplateService @Inject constructor(
                 logger.info(">> Pods not fully ready yet, waiting...")
             }
         }
+
         if (!ready) {
             // If no pods were ever found, that's OK (e.g., PVC-only templates)
             if (podResources.isEmpty()) {
@@ -159,6 +170,7 @@ abstract class OcTemplateService @Inject constructor(
             }
             throw Exception("Pods readiness check attempts exceeded")
         }
+
         if (parameters.webConsoleUrl.isPresent) {
             logger.info("Pod(s) ready on:")
             podResources.forEach { logger.info("- $it: ${parameters.webConsoleUrl.get()}/k8s/ns/$namespace/pods/$it") }
