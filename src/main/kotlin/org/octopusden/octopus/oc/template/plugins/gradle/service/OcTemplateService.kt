@@ -105,6 +105,7 @@ abstract class OcTemplateService @Inject constructor(
         var counter = 0
         var consecutiveNoPodChecks = 0
         val maxConsecutiveNoPodChecks = 3
+        var seenAnyPod = false  // Track if we've ever seen pods
 
         logger.info("Waiting for pod(s) with prefix '$deploymentPrefix-$serviceName' to be ready...")
 
@@ -112,9 +113,10 @@ abstract class OcTemplateService @Inject constructor(
             Thread.sleep(period)
             updateCreatedResources()
 
-            val checkResult = checkPodAvailability(consecutiveNoPodChecks, maxConsecutiveNoPodChecks)
+            val checkResult = checkPodAvailability(consecutiveNoPodChecks, maxConsecutiveNoPodChecks, seenAnyPod)
             if (checkResult.shouldExit) return
             consecutiveNoPodChecks = checkResult.consecutiveNoPodChecks
+            seenAnyPod = checkResult.seenAnyPod  // Update the flag
 
             if (podResources.isEmpty()) continue
 
@@ -131,25 +133,29 @@ abstract class OcTemplateService @Inject constructor(
 
     private data class PodAvailabilityCheckResult(
         val consecutiveNoPodChecks: Int,
-        val shouldExit: Boolean
+        val shouldExit: Boolean,
+        val seenAnyPod: Boolean  // Track if pods have been observed
     )
 
     private fun checkPodAvailability(
         currentConsecutiveChecks: Int,
-        maxConsecutiveChecks: Int
+        maxConsecutiveChecks: Int,
+        seenAnyPod: Boolean  // Pass current state
     ): PodAvailabilityCheckResult {
         if (podResources.isEmpty()) {
             val newCount = currentConsecutiveChecks + 1
             logger.info(">> No pods found yet, retrying... (${newCount}/${maxConsecutiveChecks})")
 
-            if (newCount >= maxConsecutiveChecks) {
+            // Only exit early if we've NEVER seen pods AND hit the threshold
+            // (If we've seen pods before, keep waiting - they might be recreating during rolling update)
+            if (newCount >= maxConsecutiveChecks && !seenAnyPod) {
                 logger.info("No pods found after $maxConsecutiveChecks checks - skipping readiness check")
-                return PodAvailabilityCheckResult(newCount, shouldExit = true)
+                return PodAvailabilityCheckResult(newCount, shouldExit = true, seenAnyPod = false)
             }
-            return PodAvailabilityCheckResult(newCount, shouldExit = false)
+            return PodAvailabilityCheckResult(newCount, shouldExit = false, seenAnyPod)
         } else {
             logger.info(">> Found ${podResources.size} pod(s): ${podResources.joinToString(", ")}")
-            return PodAvailabilityCheckResult(0, shouldExit = false)
+            return PodAvailabilityCheckResult(0, shouldExit = false, seenAnyPod = true)  // Mark that we've seen pods
         }
     }
 
