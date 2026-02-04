@@ -167,10 +167,13 @@ abstract class OcTemplateService @Inject constructor(
                         false
                     }
                 } else {
+                    // Pod disappeared - likely recreated with new name. Clear list to force refresh on next iteration.
                     logger.info(">> Pod '$podName' not found")
+                    podResources.clear()
                     false
                 }
             }
+
 
             if (allPodsReady) {
                 ready = true
