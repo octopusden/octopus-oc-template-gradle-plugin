@@ -76,11 +76,23 @@ abstract class OcTemplateService @Inject constructor(
 
         if (result.exitValue != 0) {
             val errorMessage = String(errorOutput.toByteArray())
+            val sanitizedParameters = sanitizeParameters(parameters.templateParameters.get())
             logger.error("oc process command failed with exit code ${result.exitValue}")
             logger.error("Error output: $errorMessage")
             logger.error("Template file: ${templateFile.absolutePath}")
-            logger.error("Parameters: ${parameters.templateParameters.get()}")
+            logger.error("Parameters: $sanitizedParameters")
             throw Exception("oc process failed: $errorMessage")
+        }
+    }
+
+    private fun sanitizeParameters(params: Map<String, String>): Map<String, String> {
+        val sensitiveKeys = setOf("password", "token", "secret", "apikey", "api_key", "credentials", "auth")
+        return params.mapValues { (key, value) ->
+            if (sensitiveKeys.any { key.lowercase().contains(it) }) {
+                "<redacted>"
+            } else {
+                value
+            }
         }
     }
 
