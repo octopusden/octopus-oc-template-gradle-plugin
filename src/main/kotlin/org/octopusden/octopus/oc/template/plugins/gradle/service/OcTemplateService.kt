@@ -128,7 +128,7 @@ abstract class OcTemplateService @Inject constructor(
                 val output = ByteArrayOutputStream()
                 val result = execOperations.exec {
                     it.commandLine("oc", "get", "pod", podName, "-n", namespace,
-                        "-o", "jsonpath='{.status.phase}:{.status.containerStatuses[0].ready}:{.status.containerStatuses[0].started}'")
+                        "-o", "jsonpath='{.status.phase}:{.status.containerStatuses[*].ready}:{.status.containerStatuses[*].started}'")
                     it.standardOutput = output
                     it.isIgnoreExitValue = true
                 }
@@ -139,11 +139,27 @@ abstract class OcTemplateService @Inject constructor(
 
                     if (outputString.isNotEmpty()) {
                         val parts = outputString.split(":")
-                        // Check: phase == Running, ready == true, started == true
-                        parts.size >= 3 &&
-                            parts[0] == "Running" &&
-                            parts[1] == "true" &&
-                            parts[2] == "true"
+
+                        // Defensively handle missing containerStatuses
+                        if (parts.isEmpty()) {
+                            logger.info(">> Pod '$podName' status not available yet")
+                            false
+                        } else {
+                            val phase = parts[0]
+                            val readyValues = if (parts.size > 1) parts[1].trim().split(" ").filter { it.isNotBlank() } else emptyList()
+                            val startedValues = if (parts.size > 2) parts[2].trim().split(" ").filter { it.isNotBlank() } else emptyList()
+
+                            // Check: phase == Running, all containers ready == true, all containers started == true
+                            val phaseIsRunning = phase == "Running"
+                            val allContainersReady = readyValues.isNotEmpty() && readyValues.all { it == "true" }
+                            val allContainersStarted = startedValues.isNotEmpty() && startedValues.all { it == "true" }
+
+                            if (!phaseIsRunning || !allContainersReady || !allContainersStarted) {
+                                logger.info(">> Pod '$podName' not ready: phase=$phase, ready=$readyValues, started=$startedValues")
+                            }
+
+                            phaseIsRunning && allContainersReady && allContainersStarted
+                        }
                     } else {
                         logger.info(">> Pod '$podName' status not available yet")
                         false
