@@ -162,10 +162,12 @@ abstract class OcTemplateService @Inject constructor(
 
         val phaseIsRunning = status.phase == "Running"
         val allContainersReady = status.readyValues.isNotEmpty() && status.readyValues.all { it == "true" }
-        val allContainersStarted = status.startedValues.isNotEmpty() && status.startedValues.all { it == "true" }
+        // Treat missing startedValues as successful for backward compatibility (older K8s versions may not have .started field)
+        val allContainersStarted = status.startedValues.isEmpty() || status.startedValues.all { it == "true" }
 
         if (!phaseIsRunning || !allContainersReady || !allContainersStarted) {
-            logger.info(">> Pod '$podName' not ready: phase=${status.phase}, ready=${status.readyValues}, started=${status.startedValues}")
+            val startedStatus = if (status.startedValues.isEmpty()) "n/a" else status.startedValues.toString()
+            logger.info(">> Pod '$podName' not ready: phase=${status.phase}, ready=${status.readyValues}, started=$startedStatus")
         }
 
         return phaseIsRunning && allContainersReady && allContainersStarted
