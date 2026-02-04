@@ -104,95 +104,117 @@ abstract class OcTemplateService @Inject constructor(
         var ready = false
         var counter = 0
         var consecutiveNoPodChecks = 0
-        val maxConsecutiveNoPodChecks = 3  // Exit early if no pods after 3 checks
+        val maxConsecutiveNoPodChecks = 3
 
         logger.info("Waiting for pod(s) with prefix '$deploymentPrefix-$serviceName' to be ready...")
 
         while (!ready && counter++ < attempts) {
             Thread.sleep(period)
+            updateCreatedResources()
 
-            // Refresh pod list on each check to handle Deployments that create pods asynchronously
-            if (podResources.isEmpty()) {
-                updateCreatedResources()
-                if (podResources.isEmpty()) {
-                    consecutiveNoPodChecks++
-                    logger.info(">> No pods found yet, retrying... (${consecutiveNoPodChecks}/${maxConsecutiveNoPodChecks})")
+            val checkResult = checkPodAvailability(consecutiveNoPodChecks, maxConsecutiveNoPodChecks)
+            if (checkResult.shouldExit) return
+            consecutiveNoPodChecks = checkResult.consecutiveNoPodChecks
 
-                    // Early exit: if no pods found after several checks, this template likely doesn't create pods
-                    if (consecutiveNoPodChecks >= maxConsecutiveNoPodChecks) {
-                        logger.info("No pods found after $maxConsecutiveNoPodChecks checks - skipping readiness check")
-                        return
-                    }
-                    continue
-                } else {
-                    consecutiveNoPodChecks = 0  // Reset counter when pods are found
-                    logger.info(">> Found ${podResources.size} pod(s): ${podResources.joinToString(", ")}")
-                }
-            }
+            if (podResources.isEmpty()) continue
 
-            // Check each pod individually by name
-            val allPodsReady = podResources.all { podName ->
-                val output = ByteArrayOutputStream()
-                val result = execOperations.exec {
-                    it.commandLine(
-                        "oc",
-                        "get",
-                        "pod",
-                        podName,
-                        "-n",
-                        namespace,
-                        "-o",
-                        "jsonpath='{.status.phase}:{.status.containerStatuses[*].ready}:{.status.containerStatuses[*].started}'"
-                    )
-                    it.standardOutput = output
-                    it.isIgnoreExitValue = true
-                }
-
-                if (result.exitValue == 0) {
-                    val outputString = String(output.toByteArray()).trim().removeSurrounding("'")
-                    logger.info(">> Pod '$podName' status: $outputString")
-
-                    if (outputString.isNotEmpty()) {
-                        val parts = outputString.split(":")
-                        val phase = parts[0]
-                        val readyValues =
-                            if (parts.size > 1) parts[1].trim().split(" ").filter { it.isNotBlank() } else emptyList()
-                        val startedValues =
-                            if (parts.size > 2) parts[2].trim().split(" ").filter { it.isNotBlank() } else emptyList()
-
-                        // Check: phase == Running, all containers ready == true, all containers started == true
-                        val phaseIsRunning = phase == "Running"
-                        val allContainersReady = readyValues.isNotEmpty() && readyValues.all { it == "true" }
-                        val allContainersStarted = startedValues.isNotEmpty() && startedValues.all { it == "true" }
-
-                        if (!phaseIsRunning || !allContainersReady || !allContainersStarted) {
-                            logger.info(">> Pod '$podName' not ready: phase=$phase, ready=$readyValues, started=$startedValues")
-                        }
-
-                        phaseIsRunning && allContainersReady && allContainersStarted
-                    } else {
-                        logger.info(">> Pod '$podName' status not available yet")
-                        false
-                    }
-                } else {
-                    // Pod disappeared - likely recreated with new name. Clear list to force refresh on next iteration.
-                    logger.info(">> Pod '$podName' not found")
-                    podResources.clear()
-                    false
-                }
-            }
-
-
-            if (allPodsReady) {
-                ready = true
+            ready = areAllPodsReady()
+            if (ready) {
                 logger.info(">> All pods are running and ready")
             } else {
                 logger.info(">> Pods not fully ready yet, waiting...")
             }
         }
 
+        handleReadinessResult(ready)
+    }
+
+    private data class PodAvailabilityCheckResult(
+        val consecutiveNoPodChecks: Int,
+        val shouldExit: Boolean
+    )
+
+    private fun checkPodAvailability(
+        currentConsecutiveChecks: Int,
+        maxConsecutiveChecks: Int
+    ): PodAvailabilityCheckResult {
+        if (podResources.isEmpty()) {
+            val newCount = currentConsecutiveChecks + 1
+            logger.info(">> No pods found yet, retrying... (${newCount}/${maxConsecutiveChecks})")
+
+            if (newCount >= maxConsecutiveChecks) {
+                logger.info("No pods found after $maxConsecutiveChecks checks - skipping readiness check")
+                return PodAvailabilityCheckResult(newCount, shouldExit = true)
+            }
+            return PodAvailabilityCheckResult(newCount, shouldExit = false)
+        } else {
+            logger.info(">> Found ${podResources.size} pod(s): ${podResources.joinToString(", ")}")
+            return PodAvailabilityCheckResult(0, shouldExit = false)
+        }
+    }
+
+    private fun areAllPodsReady(): Boolean {
+        return podResources.all { podName -> isPodReady(podName) }
+    }
+
+    private fun isPodReady(podName: String): Boolean {
+        val status = getPodStatus(podName) ?: return false
+
+        val phaseIsRunning = status.phase == "Running"
+        val allContainersReady = status.readyValues.isNotEmpty() && status.readyValues.all { it == "true" }
+        val allContainersStarted = status.startedValues.isNotEmpty() && status.startedValues.all { it == "true" }
+
+        if (!phaseIsRunning || !allContainersReady || !allContainersStarted) {
+            logger.info(">> Pod '$podName' not ready: phase=${status.phase}, ready=${status.readyValues}, started=${status.startedValues}")
+        }
+
+        return phaseIsRunning && allContainersReady && allContainersStarted
+    }
+
+    private data class PodStatus(
+        val phase: String,
+        val readyValues: List<String>,
+        val startedValues: List<String>
+    )
+
+    private fun getPodStatus(podName: String): PodStatus? {
+        val output = ByteArrayOutputStream()
+        val result = execOperations.exec {
+            it.commandLine(
+                "oc", "get", "pod", podName, "-n", namespace,
+                "-o", "jsonpath='{.status.phase}:{.status.containerStatuses[*].ready}:{.status.containerStatuses[*].started}'"
+            )
+            it.standardOutput = output
+            it.isIgnoreExitValue = true
+        }
+
+        if (result.exitValue != 0) {
+            logger.info(">> Pod '$podName' not found")
+            return null
+        }
+
+        val outputString = String(output.toByteArray()).trim().removeSurrounding("'")
+        logger.info(">> Pod '$podName' status: $outputString")
+
+        if (outputString.isEmpty()) {
+            logger.info(">> Pod '$podName' status not available yet")
+            return null
+        }
+
+        return parsePodStatus(outputString)
+    }
+
+    private fun parsePodStatus(statusString: String): PodStatus {
+        val parts = statusString.split(":")
+        val phase = parts[0]
+        val readyValues = if (parts.size > 1) parts[1].trim().split(" ").filter { it.isNotBlank() } else emptyList()
+        val startedValues = if (parts.size > 2) parts[2].trim().split(" ").filter { it.isNotBlank() } else emptyList()
+
+        return PodStatus(phase, readyValues, startedValues)
+    }
+
+    private fun handleReadinessResult(ready: Boolean) {
         if (!ready) {
-            // If no pods were ever found, that's OK (e.g., PVC-only templates)
             if (podResources.isEmpty()) {
                 logger.info("No pods found for this service - skipping readiness check")
                 return
@@ -202,7 +224,9 @@ abstract class OcTemplateService @Inject constructor(
 
         if (parameters.webConsoleUrl.isPresent) {
             logger.info("Pod(s) ready on:")
-            podResources.forEach { logger.info("- $it: ${parameters.webConsoleUrl.get()}/k8s/ns/$namespace/pods/$it") }
+            podResources.forEach {
+                logger.info("- $it: ${parameters.webConsoleUrl.get()}/k8s/ns/$namespace/pods/$it")
+            }
         }
     }
 
