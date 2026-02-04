@@ -193,10 +193,12 @@ abstract class OcTemplateService @Inject constructor(
 
     fun logs() {
         podResources.forEach { resource ->
-            val result = execOperations.exec {
-                it.setCommandLine("oc", "logs", "-n", namespace, resource)
-                it.standardOutput = logs.file("$resource.log").asFile.outputStream()
-                it.isIgnoreExitValue = true
+            logs.file("$resource.log").asFile.outputStream().use { outputStream ->
+                execOperations.exec {
+                    it.setCommandLine("oc", "logs", "-n", namespace, resource)
+                    it.standardOutput = outputStream
+                    it.isIgnoreExitValue = true
+                }
             }
         }
     }
