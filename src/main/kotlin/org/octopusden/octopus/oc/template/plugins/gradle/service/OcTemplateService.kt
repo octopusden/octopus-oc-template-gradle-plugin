@@ -1,6 +1,5 @@
 package org.octopusden.octopus.oc.template.plugins.gradle.service
 
-import javax.inject.Inject
 import org.gradle.api.file.Directory
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
@@ -13,6 +12,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.io.File
+import javax.inject.Inject
 
 abstract class OcTemplateService @Inject constructor(
     private val execOperations: ExecOperations
@@ -68,7 +68,12 @@ abstract class OcTemplateService @Inject constructor(
                     "oc", "process", "--local", "-o", "yaml",
                     "-f", templateFile.absolutePath,
                     *parameters.templateParameters.get().flatMap { parameter ->
-                        listOf("-p", "${parameter.key}=${parameter.value}")
+                        val value = if (osType.lowercase().contains("win")) {
+                            parameter.value.replace("\"", "\\\"")
+                        } else {
+                            parameter.value
+                        }
+                        listOf("-p", "${parameter.key}=$value")
                     }.toTypedArray()
                 )
                 it.standardOutput = outputStream
@@ -129,8 +134,16 @@ abstract class OcTemplateService @Inject constructor(
             val allPodsReady = podResources.all { podName ->
                 val output = ByteArrayOutputStream()
                 val result = execOperations.exec {
-                    it.commandLine("oc", "get", "pod", podName, "-n", namespace,
-                        "-o", "jsonpath='{.status.phase}:{.status.containerStatuses[*].ready}:{.status.containerStatuses[*].started}'")
+                    it.commandLine(
+                        "oc",
+                        "get",
+                        "pod",
+                        podName,
+                        "-n",
+                        namespace,
+                        "-o",
+                        "jsonpath='{.status.phase}:{.status.containerStatuses[*].ready}:{.status.containerStatuses[*].started}'"
+                    )
                     it.standardOutput = output
                     it.isIgnoreExitValue = true
                 }
@@ -142,8 +155,10 @@ abstract class OcTemplateService @Inject constructor(
                     if (outputString.isNotEmpty()) {
                         val parts = outputString.split(":")
                         val phase = parts[0]
-                        val readyValues = if (parts.size > 1) parts[1].trim().split(" ").filter { it.isNotBlank() } else emptyList()
-                        val startedValues = if (parts.size > 2) parts[2].trim().split(" ").filter { it.isNotBlank() } else emptyList()
+                        val readyValues =
+                            if (parts.size > 1) parts[1].trim().split(" ").filter { it.isNotBlank() } else emptyList()
+                        val startedValues =
+                            if (parts.size > 2) parts[2].trim().split(" ").filter { it.isNotBlank() } else emptyList()
 
                         // Check: phase == Running, all containers ready == true, all containers started == true
                         val phaseIsRunning = phase == "Running"
