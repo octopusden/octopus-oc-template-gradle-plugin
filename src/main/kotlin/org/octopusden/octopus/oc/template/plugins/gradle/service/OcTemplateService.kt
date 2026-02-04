@@ -62,17 +62,19 @@ abstract class OcTemplateService @Inject constructor(
 
     fun process() {
         val errorOutput = ByteArrayOutputStream()
-        val result = execOperations.exec {
-            it.setCommandLine(
-                "oc", "process", "--local", "-o", "yaml",
-                "-f", templateFile.absolutePath,
-                *parameters.templateParameters.get().flatMap { parameter ->
-                    listOf("-p", "${parameter.key}=${parameter.value}")
-                }.toTypedArray()
-            )
-            it.standardOutput = processedFile.outputStream()
-            it.errorOutput = errorOutput
-            it.isIgnoreExitValue = true
+        val result = processedFile.outputStream().use { outputStream ->
+            execOperations.exec {
+                it.setCommandLine(
+                    "oc", "process", "--local", "-o", "yaml",
+                    "-f", templateFile.absolutePath,
+                    *parameters.templateParameters.get().flatMap { parameter ->
+                        listOf("-p", "${parameter.key}=${parameter.value}")
+                    }.toTypedArray()
+                )
+                it.standardOutput = outputStream
+                it.errorOutput = errorOutput
+                it.isIgnoreExitValue = true
+            }
         }
 
         if (result.exitValue != 0) {
