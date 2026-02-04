@@ -141,27 +141,20 @@ abstract class OcTemplateService @Inject constructor(
 
                     if (outputString.isNotEmpty()) {
                         val parts = outputString.split(":")
+                        val phase = parts[0]
+                        val readyValues = if (parts.size > 1) parts[1].trim().split(" ").filter { it.isNotBlank() } else emptyList()
+                        val startedValues = if (parts.size > 2) parts[2].trim().split(" ").filter { it.isNotBlank() } else emptyList()
 
-                        // Defensively handle missing containerStatuses
-                        if (parts.isEmpty()) {
-                            logger.info(">> Pod '$podName' status not available yet")
-                            false
-                        } else {
-                            val phase = parts[0]
-                            val readyValues = if (parts.size > 1) parts[1].trim().split(" ").filter { it.isNotBlank() } else emptyList()
-                            val startedValues = if (parts.size > 2) parts[2].trim().split(" ").filter { it.isNotBlank() } else emptyList()
+                        // Check: phase == Running, all containers ready == true, all containers started == true
+                        val phaseIsRunning = phase == "Running"
+                        val allContainersReady = readyValues.isNotEmpty() && readyValues.all { it == "true" }
+                        val allContainersStarted = startedValues.isNotEmpty() && startedValues.all { it == "true" }
 
-                            // Check: phase == Running, all containers ready == true, all containers started == true
-                            val phaseIsRunning = phase == "Running"
-                            val allContainersReady = readyValues.isNotEmpty() && readyValues.all { it == "true" }
-                            val allContainersStarted = startedValues.isNotEmpty() && startedValues.all { it == "true" }
-
-                            if (!phaseIsRunning || !allContainersReady || !allContainersStarted) {
-                                logger.info(">> Pod '$podName' not ready: phase=$phase, ready=$readyValues, started=$startedValues")
-                            }
-
-                            phaseIsRunning && allContainersReady && allContainersStarted
+                        if (!phaseIsRunning || !allContainersReady || !allContainersStarted) {
+                            logger.info(">> Pod '$podName' not ready: phase=$phase, ready=$readyValues, started=$startedValues")
                         }
+
+                        phaseIsRunning && allContainersReady && allContainersStarted
                     } else {
                         logger.info(">> Pod '$podName' status not available yet")
                         false
