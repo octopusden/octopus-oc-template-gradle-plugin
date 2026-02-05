@@ -43,6 +43,9 @@ abstract class OcTemplateService @Inject constructor(
     private val podResources = mutableListOf<String>()
     private val routeResources = mutableListOf<String>()
 
+    private val osType by lazy {
+        System.getProperty("os.name")
+    }
 
     private val logger: Logger = LoggerFactory.getLogger(OcTemplateService::class.java)
 
@@ -59,19 +62,27 @@ abstract class OcTemplateService @Inject constructor(
 
     fun process() {
         val errorOutput = ByteArrayOutputStream()
-        val result = processedFile.outputStream().use { outputStream ->
+        val outputStream = processedFile.outputStream()
+        val result = try {
             execOperations.exec {
                 it.setCommandLine(
                     "oc", "process", "--local", "-o", "yaml",
                     "-f", templateFile.absolutePath,
                     *parameters.templateParameters.get().flatMap { parameter ->
-                        listOf("-p", "${parameter.key}=${parameter.value}")
+                        val value = if (osType.lowercase().contains("win")) {
+                            parameter.value.replace("\"", "\\\"")
+                        } else {
+                            parameter.value
+                        }
+                        listOf("-p", "${parameter.key}=$value")
                     }.toTypedArray()
                 )
                 it.standardOutput = outputStream
                 it.errorOutput = errorOutput
                 it.isIgnoreExitValue = true
             }
+        } finally {
+            outputStream.close()
         }
 
         if (result.exitValue != 0) {
