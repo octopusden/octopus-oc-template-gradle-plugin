@@ -66,9 +66,13 @@ abstract class OcTemplateService @Inject constructor(
                     "oc", "process", "--local", "-o", "yaml",
                     "-f", templateFile.absolutePath,
                     *parameters.templateParameters.get().flatMap { parameter ->
-                        // Gradle's setCommandLine() handles escaping automatically for each argument
-                        // No manual quoting needed - just pass the raw value
-                        listOf("-p", "${parameter.key}=${parameter.value}")
+                        // On Windows, wrap values in quotes if they contain special characters
+                        val value = if (isWindows && requiresQuoting(parameter.value)) {
+                            "\"${parameter.value}\""
+                        } else {
+                            parameter.value
+                        }
+                        listOf("-p", "${parameter.key}=$value")
                     }.toTypedArray()
                 )
                 it.standardOutput = outputStream
@@ -90,6 +94,13 @@ abstract class OcTemplateService @Inject constructor(
         }
     }
 
+    private fun requiresQuoting(value: String): Boolean {
+        // Check if value contains characters that need quoting on Windows command line
+        return value.contains(' ') || value.contains('\\') || value.contains(';') ||
+                value.contains('(') || value.contains(')') || value.contains('&') ||
+                value.contains('|') || value.contains('<') || value.contains('>') ||
+                value.contains('^') || value.contains('%') || value.contains('!')
+    }
 
     private fun sanitizeParameters(params: Map<String, String>): Map<String, String> {
         val sensitiveKeys = setOf("password", "token", "secret", "apikey", "api_key", "credentials", "auth")
