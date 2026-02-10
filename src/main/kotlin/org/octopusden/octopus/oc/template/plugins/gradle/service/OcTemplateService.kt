@@ -42,7 +42,7 @@ abstract class OcTemplateService @Inject constructor(
     private val deploymentPrefix: String
     private val podResources = mutableListOf<String>()
     private val routeResources = mutableListOf<String>()
-
+    private val isWindows: Boolean = System.getProperty("os.name").lowercase().contains("win")
 
     private val logger: Logger = LoggerFactory.getLogger(OcTemplateService::class.java)
 
@@ -59,28 +59,47 @@ abstract class OcTemplateService @Inject constructor(
 
     fun process() {
         val errorOutput = ByteArrayOutputStream()
-        val result = execOperations.exec {
-            it.setCommandLine(
-                "oc", "process", "--local", "-o", "yaml",
-                "-f", templateFile.absolutePath,
-                *parameters.templateParameters.get().flatMap { parameter ->
-                    listOf("-p", "${parameter.key}=${parameter.value}")
-                }.toTypedArray()
-            )
-            it.standardOutput = processedFile.outputStream()
-            it.errorOutput = errorOutput
-            it.isIgnoreExitValue = true
-        }
+        val outputStream = processedFile.outputStream()
+        try {
+            val result = execOperations.exec {
+                it.setCommandLine(
+                    "oc", "process", "--local", "-o", "yaml",
+                    "-f", templateFile.absolutePath,
+                    *parameters.templateParameters.get().flatMap { parameter ->
+                        // On Windows, wrap values in quotes if they contain special characters
+                        val value = if (isWindows && requiresQuoting(parameter.value)) {
+                            "\"${parameter.value}\""
+                        } else {
+                            parameter.value
+                        }
+                        listOf("-p", "${parameter.key}=$value")
+                    }.toTypedArray()
+                )
+                it.standardOutput = outputStream
+                it.errorOutput = errorOutput
+                it.isIgnoreExitValue = true
+            }
 
-        if (result.exitValue != 0) {
-            val errorMessage = String(errorOutput.toByteArray())
-            val sanitizedParameters = sanitizeParameters(parameters.templateParameters.get())
-            logger.error("oc process command failed with exit code ${result.exitValue}")
-            logger.error("Error output: $errorMessage")
-            logger.error("Template file: ${templateFile.absolutePath}")
-            logger.error("Parameters: $sanitizedParameters")
-            throw Exception("oc process failed: $errorMessage")
+            if (result.exitValue != 0) {
+                val errorMessage = String(errorOutput.toByteArray())
+                val sanitizedParameters = sanitizeParameters(parameters.templateParameters.get())
+                logger.error("oc process command failed with exit code ${result.exitValue}")
+                logger.error("Error output: $errorMessage")
+                logger.error("Template file: ${templateFile.absolutePath}")
+                logger.error("Parameters: $sanitizedParameters")
+                throw Exception("oc process failed: $errorMessage")
+            }
+        } finally {
+            outputStream.close()
         }
+    }
+
+    private fun requiresQuoting(value: String): Boolean {
+        // Check if value contains characters that need quoting on Windows command line
+        return value.contains(' ') || value.contains('\\') || value.contains(';') ||
+                value.contains('(') || value.contains(')') || value.contains('&') ||
+                value.contains('|') || value.contains('<') || value.contains('>') ||
+                value.contains('^') || value.contains('%') || value.contains('!')
     }
 
     private fun sanitizeParameters(params: Map<String, String>): Map<String, String> {
