@@ -43,6 +43,9 @@ abstract class OcTemplateService @Inject constructor(
     private val podResources = mutableListOf<String>()
     private val routeResources = mutableListOf<String>()
 
+    private val osType by lazy {
+        System.getProperty("os.name")
+    }
 
     private val logger: Logger = LoggerFactory.getLogger(OcTemplateService::class.java)
 
@@ -58,33 +61,28 @@ abstract class OcTemplateService @Inject constructor(
     }
 
     fun process() {
-        // Build command line
-        val commandLine = buildList {
-            add("oc")
-            add("process")
-            add("--local")
-            add("-o")
-            add("yaml")
-            add("-f")
-            add(templateFile.absolutePath)
-            parameters.templateParameters.get().forEach { (key, value) ->
-                add("-p")
-                add("$key=$value")
-            }
-        }
-
-        // Log input data and command
-        logger.info("Processing template:")
-        logger.info("  Template file: ${templateFile.absolutePath}")
-        logger.info("  Parameters: ${parameters.templateParameters.get()}")
-        logger.info("  Command: ${commandLine.joinToString(" ")}")
-
         val errorOutput = ByteArrayOutputStream()
-        val result = execOperations.exec {
-            it.commandLine = commandLine
-            it.standardOutput = processedFile.outputStream()
-            it.errorOutput = errorOutput
-            it.isIgnoreExitValue = true
+        val outputStream = processedFile.outputStream()
+        val result = try {
+            execOperations.exec {
+                it.setCommandLine(
+                    "oc", "process", "--local", "-o", "yaml",
+                    "-f", templateFile.absolutePath,
+                    *parameters.templateParameters.get().flatMap { parameter ->
+                        val value = if (osType.lowercase().contains("win")) {
+                            parameter.value.replace("\"", "\\\"")
+                        } else {
+                            parameter.value
+                        }
+                        listOf("-p", "${parameter.key}=$value")
+                    }.toTypedArray()
+                )
+                it.standardOutput = outputStream
+                it.errorOutput = errorOutput
+                it.isIgnoreExitValue = true
+            }
+        } finally {
+            outputStream.close()
         }
 
         if (result.exitValue != 0) {
