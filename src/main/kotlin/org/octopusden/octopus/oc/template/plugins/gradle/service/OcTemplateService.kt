@@ -75,13 +75,9 @@ abstract class OcTemplateService @Inject constructor(
 
         // Log input data and command
         logger.info("Processing template:")
-        println("Processing template:")
         logger.info("  Template file: ${templateFile.absolutePath}")
-        println("  Template file: ${templateFile.absolutePath}")
         logger.info("  Parameters: ${parameters.templateParameters.get()}")
-        println("  Parameters: ${parameters.templateParameters.get()}")
         logger.info("  Command: ${commandLine.joinToString(" ")}")
-        println("  Command: ${commandLine.joinToString(" ")}")
 
         val errorOutput = ByteArrayOutputStream()
         val result = execOperations.exec {
