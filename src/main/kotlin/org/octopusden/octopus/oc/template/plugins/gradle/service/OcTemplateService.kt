@@ -1,6 +1,5 @@
 package org.octopusden.octopus.oc.template.plugins.gradle.service
 
-import javax.inject.Inject
 import org.gradle.api.file.Directory
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
@@ -13,7 +12,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.OutputStream
+import javax.inject.Inject
 
 abstract class OcTemplateService @Inject constructor(
     private val execOperations: ExecOperations
@@ -62,19 +61,50 @@ abstract class OcTemplateService @Inject constructor(
     }
 
     fun process() {
-        execOperations.exec {
-            it.setCommandLine(
-                "oc", "process", "--local", "-o", "yaml",
-                "-f", templateFile.absolutePath,
-                *parameters.templateParameters.get().flatMap { parameter ->
-                    val value = if (osType.lowercase().contains("win")) {
-                        parameter.value.replace("\"", "\\\"")
-                    } else parameter.value
-                    listOf("-p", "${parameter.key}=$value")
-                }.toTypedArray()
-            )
-            it.standardOutput = processedFile.outputStream()
-        }.assertNormalExitValue()
+        val errorOutput = ByteArrayOutputStream()
+        val outputStream = processedFile.outputStream()
+        val result = try {
+            execOperations.exec {
+                it.setCommandLine(
+                    "oc", "process", "--local", "-o", "yaml",
+                    "-f", templateFile.absolutePath,
+                    *parameters.templateParameters.get().flatMap { parameter ->
+                        val value = if (osType.lowercase().contains("win")) {
+                            parameter.value.replace("\"", "\\\"")
+                        } else {
+                            parameter.value
+                        }
+                        listOf("-p", "${parameter.key}=$value")
+                    }.toTypedArray()
+                )
+                it.standardOutput = outputStream
+                it.errorOutput = errorOutput
+                it.isIgnoreExitValue = true
+            }
+        } finally {
+            outputStream.close()
+        }
+
+        if (result.exitValue != 0) {
+            val errorMessage = String(errorOutput.toByteArray())
+            val sanitizedParameters = sanitizeParameters(parameters.templateParameters.get())
+            logger.error("oc process command failed with exit code ${result.exitValue}")
+            logger.error("Error output: $errorMessage")
+            logger.error("Template file: ${templateFile.absolutePath}")
+            logger.error("Parameters: $sanitizedParameters")
+            throw Exception("oc process failed: $errorMessage")
+        }
+    }
+
+    private fun sanitizeParameters(params: Map<String, String>): Map<String, String> {
+        val sensitiveKeys = setOf("password", "token", "secret", "apikey", "api_key", "credentials", "auth")
+        return params.mapValues { (key, value) ->
+            if (sensitiveKeys.any { key.lowercase().contains(it) }) {
+                "<redacted>"
+            } else {
+                value
+            }
+        }
     }
 
     fun create() {
@@ -86,49 +116,151 @@ abstract class OcTemplateService @Inject constructor(
     }
 
     fun waitReadiness() {
-        if (podResources.isEmpty()) {
-            logger.warn("No pod resources found to check for readiness")
-        } else {
-            waitPodsReadiness()
-        }
-    }
-
-    private fun waitPodsReadiness() {
         var ready = false
         var counter = 0
-        var output: OutputStream
+        var consecutiveNoPodChecks = 0
+        val maxConsecutiveNoPodChecks = 3
+        var seenAnyPod = false  // Track if we've ever seen pods
 
-        val jsonPath = if (podResources.size == 1) {
-            "jsonpath='{.status.containerStatuses[0].ready}'"
-        } else {
-            "jsonpath='{.items[*].status.containerStatuses[0].ready}'"
-        }
+        logger.info("Waiting for pod(s) with prefix '$deploymentPrefix-$serviceName' to be ready...")
 
         while (!ready && counter++ < attempts) {
             Thread.sleep(period)
-            output = ByteArrayOutputStream()
-            execOperations.exec {
-                it.commandLine("oc", "get", "pod", *podResources.toTypedArray(), "-n", namespace, "-o", jsonPath)
-                it.standardOutput = output
+            updateCreatedResources()
+
+            val checkResult = checkPodAvailability(consecutiveNoPodChecks, maxConsecutiveNoPodChecks, seenAnyPod)
+            if (checkResult.shouldExit) return
+            consecutiveNoPodChecks = checkResult.consecutiveNoPodChecks
+            seenAnyPod = checkResult.seenAnyPod  // Update the flag
+
+            if (podResources.isEmpty()) continue
+
+            ready = areAllPodsReady()
+            if (ready) {
+                logger.info(">> All pods are running and ready")
+            } else {
+                logger.info(">> Pods not fully ready yet, waiting...")
             }
-            val outputString = String(output.toByteArray())
-            logger.info(">> Check pods readiness status: $outputString")
-            ready = !outputString.contains("false")
         }
+
+        handleReadinessResult(ready)
+    }
+
+    private data class PodAvailabilityCheckResult(
+        val consecutiveNoPodChecks: Int,
+        val shouldExit: Boolean,
+        val seenAnyPod: Boolean  // Track if pods have been observed
+    )
+
+    private fun checkPodAvailability(
+        currentConsecutiveChecks: Int,
+        maxConsecutiveChecks: Int,
+        seenAnyPod: Boolean  // Pass current state
+    ): PodAvailabilityCheckResult {
+        if (podResources.isEmpty()) {
+            val newCount = currentConsecutiveChecks + 1
+            logger.info(">> No pods found yet, retrying... (${newCount}/${maxConsecutiveChecks})")
+
+            // Only exit early if we've NEVER seen pods AND hit the threshold
+            // (If we've seen pods before, keep waiting - they might be recreating during rolling update)
+            if (newCount >= maxConsecutiveChecks && !seenAnyPod) {
+                logger.info("No pods found after $maxConsecutiveChecks checks - skipping readiness check")
+                return PodAvailabilityCheckResult(newCount, shouldExit = true, seenAnyPod = false)
+            }
+            return PodAvailabilityCheckResult(newCount, shouldExit = false, seenAnyPod)
+        } else {
+            logger.info(">> Found ${podResources.size} pod(s): ${podResources.joinToString(", ")}")
+            return PodAvailabilityCheckResult(0, shouldExit = false, seenAnyPod = true)  // Mark that we've seen pods
+        }
+    }
+
+    private fun areAllPodsReady(): Boolean {
+        return podResources.all { podName -> isPodReady(podName) }
+    }
+
+    private fun isPodReady(podName: String): Boolean {
+        val status = getPodStatus(podName) ?: return false
+
+        val phaseIsRunning = status.phase == "Running"
+        val allContainersReady = status.readyValues.isNotEmpty() && status.readyValues.all { it == "true" }
+        // Treat missing startedValues as successful for backward compatibility (older K8s versions may not have .started field)
+        val allContainersStarted = status.startedValues.isEmpty() || status.startedValues.all { it == "true" }
+
+        if (!phaseIsRunning || !allContainersReady || !allContainersStarted) {
+            val startedStatus = if (status.startedValues.isEmpty()) "n/a" else status.startedValues.toString()
+            logger.info(">> Pod '$podName' not ready: phase=${status.phase}, ready=${status.readyValues}, started=$startedStatus")
+        }
+
+        return phaseIsRunning && allContainersReady && allContainersStarted
+    }
+
+    private data class PodStatus(
+        val phase: String,
+        val readyValues: List<String>,
+        val startedValues: List<String>
+    )
+
+    private fun getPodStatus(podName: String): PodStatus? {
+        val output = ByteArrayOutputStream()
+        val result = execOperations.exec {
+            it.commandLine(
+                "oc", "get", "pod", podName, "-n", namespace,
+                "-o", "jsonpath='{.status.phase}:{.status.containerStatuses[*].ready}:{.status.containerStatuses[*].started}'"
+            )
+            it.standardOutput = output
+            it.isIgnoreExitValue = true
+        }
+
+        if (result.exitValue != 0) {
+            logger.info(">> Pod '$podName' not found")
+            return null
+        }
+
+        val outputString = String(output.toByteArray()).trim().removeSurrounding("'")
+        logger.info(">> Pod '$podName' status: $outputString")
+
+        if (outputString.isEmpty()) {
+            logger.info(">> Pod '$podName' status not available yet")
+            return null
+        }
+
+        return parsePodStatus(outputString)
+    }
+
+    private fun parsePodStatus(statusString: String): PodStatus {
+        val parts = statusString.split(":")
+        val phase = parts[0]
+        val readyValues = if (parts.size > 1) parts[1].trim().split(" ").filter { it.isNotBlank() } else emptyList()
+        val startedValues = if (parts.size > 2) parts[2].trim().split(" ").filter { it.isNotBlank() } else emptyList()
+
+        return PodStatus(phase, readyValues, startedValues)
+    }
+
+    private fun handleReadinessResult(ready: Boolean) {
         if (!ready) {
+            if (podResources.isEmpty()) {
+                logger.info("No pods found for this service - skipping readiness check")
+                return
+            }
             throw Exception("Pods readiness check attempts exceeded")
         }
+
         if (parameters.webConsoleUrl.isPresent) {
             logger.info("Pod(s) ready on:")
-            podResources.forEach { logger.info("- $it: ${parameters.webConsoleUrl.get()}/k8s/ns/$namespace/pods/$it") }
+            podResources.forEach {
+                logger.info("- $it: ${parameters.webConsoleUrl.get()}/k8s/ns/$namespace/pods/$it")
+            }
         }
     }
 
     fun logs() {
         podResources.forEach { resource ->
-            execOperations.exec {
-                it.setCommandLine("oc", "logs", "-n", namespace, resource)
-                it.standardOutput = logs.file("$resource.log").asFile.outputStream()
+            logs.file("$resource.log").asFile.outputStream().use { outputStream ->
+                execOperations.exec {
+                    it.setCommandLine("oc", "logs", "-n", namespace, resource)
+                    it.standardOutput = outputStream
+                    it.isIgnoreExitValue = true
+                }
             }
         }
     }
