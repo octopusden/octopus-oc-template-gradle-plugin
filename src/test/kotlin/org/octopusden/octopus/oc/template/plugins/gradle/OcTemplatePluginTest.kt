@@ -36,6 +36,7 @@ class OcTemplatePluginTest {
         assertEquals(0, instance.exitCode)
         assertThat(projectPath.resolve("build/$WORK_DIR/postgres.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}").toFile()).isNotEmpty()
     }
 
     @Test
@@ -170,8 +171,10 @@ class OcTemplatePluginTest {
         assertEquals(0, instance.exitCode)
         assertThat(projectPath.resolve("build/$WORK_DIR/service1/postgres-1.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/service1/logs/${getLogFileName("postgres-1")}")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/service1/logs/${getLogFileName("postgres-1")}").toFile()).isNotEmpty()
         assertThat(projectPath.resolve("build/$WORK_DIR/service2/postgres-2.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/service2/logs/${getLogFileName("postgres-2")}")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/service2/logs/${getLogFileName("postgres-2")}").toFile()).isNotEmpty()
     }
 
     @Test
@@ -199,8 +202,10 @@ class OcTemplatePluginTest {
         assertEquals(0, instance.exitCode)
         assertThat(projectPath.resolve("build/$WORK_DIR/postgres-1.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres-1")}")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres-1")}").toFile()).isNotEmpty()
         assertThat(projectPath.resolve("build/$WORK_DIR/postgres-2.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres-2")}")).exists()
+        assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres-2")}").toFile()).isNotEmpty()
     }
 
 
@@ -222,6 +227,29 @@ class OcTemplatePluginTest {
         }
         assertThat(projectPath.resolve("build/$WORK_DIR/postgres.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).exists()
+    }
+
+    /**
+     * Verifies that when a pod is force-deleted before logs() runs,
+     * the streaming log file is preserved with content captured in real-time.
+     * This simulates the OOM-kill scenario where oc logs fails on a deleted pod.
+     */
+    @Test
+    fun testKilledPodPreservesStreamingLog() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/killed-pod"
+            tasks = TASKS
+            additionalArguments = DEFAULT_PARAMETERS
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
+        }
+        assertEquals(0, instance.exitCode)
+        val logFile = projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("killable-pod")}").toFile()
+        assertThat(logFile).exists()
+        assertThat(logFile).isNotEmpty()
+        assertThat(logFile.readText()).contains("STREAMING_CAPTURE_MARKER")
+        assertThat(instance.stdOut).anySatisfy {
+            assertThat(it).contains("keeping streaming log")
+        }
     }
 
     private fun getLogFileName(serviceName: String): String {

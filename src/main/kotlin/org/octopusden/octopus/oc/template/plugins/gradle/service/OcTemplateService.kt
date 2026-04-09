@@ -12,6 +12,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 abstract class OcTemplateService @Inject constructor(
@@ -42,6 +43,9 @@ abstract class OcTemplateService @Inject constructor(
     private val deploymentPrefix: String
     private val podResources = mutableListOf<String>()
     private val routeResources = mutableListOf<String>()
+
+    private val streamingProcesses = ConcurrentHashMap<String, Process>()
+    private val streamingThreads = ConcurrentHashMap<String, Thread>()
 
     private val osType by lazy {
         System.getProperty("os.name")
@@ -108,11 +112,14 @@ abstract class OcTemplateService @Inject constructor(
     }
 
     fun create() {
+        stopLogStreaming()
+        logs.asFile.listFiles()?.forEach { it.delete() }
         delete()
         execOperations.exec {
             it.setCommandLine("oc", "create", "-n", namespace, "-f", processedFile.absolutePath)
         }.assertNormalExitValue()
         updateCreatedResources()
+        startLogStreaming()
     }
 
     fun waitReadiness() {
@@ -127,6 +134,7 @@ abstract class OcTemplateService @Inject constructor(
         while (!ready && counter++ < attempts) {
             Thread.sleep(period)
             updateCreatedResources()
+            startLogStreaming()
 
             val checkResult = checkPodAvailability(consecutiveNoPodChecks, maxConsecutiveNoPodChecks, seenAnyPod)
             if (checkResult.shouldExit) return
@@ -254,15 +262,89 @@ abstract class OcTemplateService @Inject constructor(
     }
 
     fun logs() {
+        stopLogStreaming()
         podResources.forEach { resource ->
-            logs.file("$resource.log").asFile.outputStream().use { outputStream ->
-                execOperations.exec {
-                    it.setCommandLine("oc", "logs", "-n", namespace, resource)
-                    it.standardOutput = outputStream
-                    it.isIgnoreExitValue = true
+            val logFile = logs.file("$resource.log").asFile
+            val snapshot = ByteArrayOutputStream()
+            val result = execOperations.exec {
+                it.setCommandLine("oc", "logs", "-n", namespace, resource)
+                it.standardOutput = snapshot
+                it.isIgnoreExitValue = true
+            }
+            val snapshotBytes = snapshot.toByteArray()
+            if (result.exitValue == 0 && snapshotBytes.isNotEmpty()) {
+                logFile.writeBytes(snapshotBytes)
+            } else if (logFile.exists() && logFile.length() > 0) {
+                logger.info("oc logs failed or empty for '$resource', keeping streaming log")
+            } else {
+                logFile.writeBytes(snapshotBytes)
+            }
+        }
+    }
+
+    private fun startLogStreaming() {
+        val pods = podResources.toList()
+        pods.forEach { podName ->
+            if (streamingProcesses.containsKey(podName)) return@forEach
+            val logFile = logs.file("$podName.log").asFile
+            val thread = Thread {
+                streamLogForPod(podName, logFile)
+            }.apply {
+                isDaemon = true
+                name = "log-stream-$podName"
+                start()
+            }
+            streamingThreads[podName] = thread
+        }
+    }
+
+    private fun streamLogForPod(podName: String, logFile: File) {
+        val maxRetries = 10
+        val retryDelay = 3000L
+        for (attempt in 1..maxRetries) {
+            if (Thread.currentThread().isInterrupted) return
+            try {
+                val process = ProcessBuilder(
+                    "oc", "logs", "-f", podName, "--all-containers", "-n", namespace
+                ).redirectErrorStream(true).start()
+                streamingProcesses[podName] = process
+                process.inputStream.use { input ->
+                    logFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                val exitCode = process.waitFor()
+                if (exitCode == 0) return
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            } catch (e: Exception) {
+                logger.debug("Log streaming attempt $attempt/$maxRetries for '$podName' failed: ${e.message}")
+            }
+            if (attempt < maxRetries) {
+                try {
+                    Thread.sleep(retryDelay)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return
                 }
             }
         }
+        logger.debug("Log streaming for '$podName' gave up after $maxRetries attempts")
+    }
+
+    private fun stopLogStreaming() {
+        streamingProcesses.values.forEach { it.destroyForcibly() }
+        streamingThreads.values.forEach { thread ->
+            thread.interrupt()
+            try {
+                thread.join(5000)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+        }
+        streamingProcesses.clear()
+        streamingThreads.clear()
     }
 
     fun delete() {
@@ -296,6 +378,7 @@ abstract class OcTemplateService @Inject constructor(
     }
 
     override fun close() {
+        stopLogStreaming()
         if (parameters.autoCleanup.getOrElse(true)) {
             delete()
         } else {

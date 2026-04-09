@@ -1,0 +1,27 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: killable-pod
+objects:
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: ${DEPLOYMENT_PREFIX}-killable-pod
+      labels:
+        app.kubernetes.io/name: ${DEPLOYMENT_PREFIX}-killable-pod
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: ${DEPLOYMENT_PREFIX}-killable-pod
+          image: ${DOCKER_REGISTRY}/postgres:latest
+          command:
+            - /bin/sh
+            - -c
+            - "echo STREAMING_CAPTURE_MARKER && sleep 3600"
+parameters:
+  - description: Docker registry
+    name: DOCKER_REGISTRY
+    required: true
+  - description: DEPLOYMENT_PREFIX
+    name: DEPLOYMENT_PREFIX
+    required: true
