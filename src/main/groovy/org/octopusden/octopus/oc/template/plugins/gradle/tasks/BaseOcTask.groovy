@@ -8,6 +8,7 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
+import org.octopusden.octopus.oc.template.plugins.gradle.service.OcDiagnosticsService
 import org.octopusden.octopus.oc.template.plugins.gradle.service.OcTemplateService
 import org.octopusden.octopus.oc.template.plugins.gradle.service.OcTemplateServiceRegistry
 
@@ -19,6 +20,12 @@ abstract class BaseOcTask extends DefaultTask {
 
     @Internal
     final Property<OcTemplateServiceRegistry> serviceRegistry = project.objects.property(OcTemplateServiceRegistry)
+
+    @Internal
+    final Property<OcDiagnosticsService> diagnosticsService = project.objects.property(OcDiagnosticsService)
+
+    @Internal
+    final Property<Boolean> diagnosticsEnabled = project.objects.property(Boolean).convention(true)
 
     @Inject
     BaseOcTask(String descriptionText) {

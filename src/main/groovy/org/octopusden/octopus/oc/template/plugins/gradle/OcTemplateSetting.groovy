@@ -31,10 +31,14 @@ abstract class OcTemplateSetting {
     abstract Property<Integer> getAttempts()
     abstract Property<Boolean> getAutoCleanup()
 
+    abstract Property<Boolean> getDiagnosticsEnabled()
+    abstract Property<Long> getDiagnosticsPeriod()
+
     private String nestedName
 
     static final Long DEFAULT_WAIT_PERIOD = 15000L // 15 seconds
     static final Integer DEFAULT_WAIT_ATTEMPTS = 40 // ~10 minutes
+    static final Long DEFAULT_DIAGNOSTICS_PERIOD = 10000L // 10 seconds
 
     @Inject
     OcTemplateSetting(Project project, String name = "", String parentName = "") {
@@ -49,6 +53,8 @@ abstract class OcTemplateSetting {
         period.set(DEFAULT_WAIT_PERIOD)
         attempts.set(DEFAULT_WAIT_ATTEMPTS)
         autoCleanup.set(true)
+        diagnosticsEnabled.set(true)
+        diagnosticsPeriod.set(DEFAULT_DIAGNOSTICS_PERIOD)
 
         applyEnvVariableOverrides()
 
@@ -84,6 +90,8 @@ abstract class OcTemplateSetting {
         newTemplateSetting.workDir.set(this.workDir.get())
         newTemplateSetting.period.set(this.period.get())
         newTemplateSetting.attempts.set(this.attempts.get())
+        newTemplateSetting.diagnosticsEnabled.set(this.diagnosticsEnabled.get())
+        newTemplateSetting.diagnosticsPeriod.set(this.diagnosticsPeriod.get())
 
         newTemplateSetting.applyEnvVariableOverrides(this)
 

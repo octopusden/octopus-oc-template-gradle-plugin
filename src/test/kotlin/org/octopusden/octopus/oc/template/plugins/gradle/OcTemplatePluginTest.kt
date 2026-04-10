@@ -252,6 +252,51 @@ class OcTemplatePluginTest {
         }
     }
 
+    /**
+     * Verifies that the namespace diagnostics collector runs around an FT-style
+     * task (via `isRequiredBy`) and writes its artifacts under <workDir>/diagnostics/.
+     * Covers the full lifecycle: before-snapshot, streaming samples, after-snapshot,
+     * meta.json, and the post-mortem summary.txt.
+     */
+    @Test
+    fun testDiagnosticsArtifactsProduced() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/simple-project"
+            tasks = TASKS
+            additionalArguments = DEFAULT_PARAMETERS
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
+        }
+        assertEquals(0, instance.exitCode)
+
+        val diagnosticsRoot = projectPath.resolve("build/$WORK_DIR/diagnostics").toFile()
+        assertThat(diagnosticsRoot).exists().isDirectory()
+
+        val runDirs = diagnosticsRoot.listFiles { f -> f.isDirectory && f.name.startsWith("ft-run-") }
+        assertThat(runDirs).isNotNull()
+        assertThat(runDirs!!).hasSize(1)
+
+        val runDir = runDirs[0]
+        // Required artifacts
+        assertThat(runDir.resolve("meta.json")).exists().isFile()
+        assertThat(runDir.resolve("summary.txt")).exists().isFile()
+        assertThat(runDir.resolve("snapshot-before")).exists().isDirectory()
+        assertThat(runDir.resolve("snapshot-after")).exists().isDirectory()
+
+        // The "before" snapshot should at least contain pods.json (pods always listable in a valid namespace)
+        assertThat(runDir.resolve("snapshot-before/pods.json")).exists()
+        assertThat(runDir.resolve("snapshot-after/pods.json")).exists()
+
+        // summary.txt should include the canonical classification line
+        val summary = runDir.resolve("summary.txt").readText()
+        assertThat(summary).contains("Likely resource problem:")
+        assertThat(summary).contains("namespace: $OKD_PROJECT")
+
+        // meta.json should record project/namespace so cross-run aggregation can distinguish runs
+        val meta = runDir.resolve("meta.json").readText()
+        assertThat(meta).contains("\"namespace\":\"$OKD_PROJECT\"")
+        assertThat(meta).contains("\"schemaVersion\":1")
+    }
+
     private fun getLogFileName(serviceName: String): String {
         return "$DEPLOYMENT_PREFIX-1-0-snapshot-$serviceName.log"
     }
