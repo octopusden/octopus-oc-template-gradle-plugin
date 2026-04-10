@@ -290,7 +290,7 @@ class DiagnosticsCollector(
     }
 
     companion object {
-        private const val DEFAULT_TIMEOUT_MS = 60_000L
+        private const val DEFAULT_TIMEOUT_MS = 30_000L
 
         internal fun parseCpuMillicores(s: String): Long {
             val t = s.trim()
@@ -349,14 +349,20 @@ class DiagnosticsCollector(
             return try {
                 val pb = ProcessBuilder(listOf("oc") + args).redirectErrorStream(false)
                 val p = pb.start()
+                val stdoutFuture = java.util.concurrent.CompletableFuture.supplyAsync {
+                    p.inputStream.bufferedReader().readText()
+                }
+                val stderrFuture = java.util.concurrent.CompletableFuture.supplyAsync {
+                    p.errorStream.bufferedReader().readText()
+                }
                 val finished = p.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
                 if (!finished) {
                     p.destroyForcibly()
+                    stdoutFuture.cancel(true)
+                    stderrFuture.cancel(true)
                     return OcResult(-1, "", "timeout after ${timeoutMs}ms")
                 }
-                val out = p.inputStream.bufferedReader().readText()
-                val err = p.errorStream.bufferedReader().readText()
-                OcResult(p.exitValue(), out, err)
+                OcResult(p.exitValue(), stdoutFuture.get(), stderrFuture.get())
             } catch (e: Exception) {
                 OcResult(-1, "", e.message.orEmpty())
             }
