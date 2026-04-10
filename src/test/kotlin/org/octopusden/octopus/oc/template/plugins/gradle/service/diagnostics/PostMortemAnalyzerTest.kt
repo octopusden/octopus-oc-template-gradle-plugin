@@ -23,7 +23,6 @@ class PostMortemAnalyzerTest {
             """{"ts":"2026-04-09T14:03:12Z","name":"default","resource":"limits.memory","hard":"10Gi","used":"2Gi"}""" + "\n"
         )
         dir.resolve("events.jsonl").writeText("")
-        dir.resolve("nodes.jsonl").writeText("")
 
         val summary = PostMortemAnalyzer.analyze(dir)
         assertThat(summary).contains("Likely resource problem: NO")
@@ -46,7 +45,6 @@ class PostMortemAnalyzerTest {
         )
         dir.resolve("quota.jsonl").writeText("")
         dir.resolve("events.jsonl").writeText("")
-        dir.resolve("nodes.jsonl").writeText("")
 
         val summary = PostMortemAnalyzer.analyze(dir)
         assertThat(summary).contains("Likely resource problem: YES")
@@ -56,7 +54,7 @@ class PostMortemAnalyzerTest {
     }
 
     @Test
-    fun `detects quota pressure and node pressure`(@TempDir dir: File) {
+    fun `detects quota pressure and FailedScheduling`(@TempDir dir: File) {
         writeMeta(dir, "proj-c", "ns-c")
         dir.resolve("pod-limits.jsonl").writeText("")
         dir.resolve("metrics.jsonl").writeText("")
@@ -67,16 +65,11 @@ class PostMortemAnalyzerTest {
         dir.resolve("events.jsonl").writeText(
             """{"ts":"2026-04-09T14:01:00Z","eventTs":"2026-04-09T14:01:00Z","type":"Warning","reason":"FailedScheduling","object":"Pod/pending-svc","message":"0/6 nodes insufficient memory"}""" + "\n"
         )
-        dir.resolve("nodes.jsonl").writeText(
-            """{"ts":"2026-04-09T14:02:00Z","node":"worker-3","condition":"MemoryPressure","status":"True"}""" + "\n"
-        )
 
         val summary = PostMortemAnalyzer.analyze(dir)
         assertThat(summary).contains("Likely resource problem: YES")
         assertThat(summary).contains("quota-pressure")
         assertThat(summary).contains("FailedScheduling")
-        assertThat(summary).contains("node-pressure")
-        assertThat(summary).contains("worker-3")
     }
 
     @Test

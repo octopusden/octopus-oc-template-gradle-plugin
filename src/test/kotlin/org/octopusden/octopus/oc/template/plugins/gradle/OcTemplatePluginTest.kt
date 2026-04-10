@@ -276,22 +276,18 @@ class OcTemplatePluginTest {
         assertThat(runDirs!!).hasSize(1)
 
         val runDir = runDirs[0]
-        // Required artifacts
         assertThat(runDir.resolve("meta.json")).exists().isFile()
         assertThat(runDir.resolve("summary.txt")).exists().isFile()
         assertThat(runDir.resolve("snapshot-before")).exists().isDirectory()
         assertThat(runDir.resolve("snapshot-after")).exists().isDirectory()
 
-        // The "before" snapshot should at least contain pods.json (pods always listable in a valid namespace)
         assertThat(runDir.resolve("snapshot-before/pods.json")).exists()
         assertThat(runDir.resolve("snapshot-after/pods.json")).exists()
 
-        // summary.txt should include the canonical classification line
         val summary = runDir.resolve("summary.txt").readText()
         assertThat(summary).contains("Likely resource problem:")
         assertThat(summary).contains("namespace: $OKD_PROJECT")
 
-        // meta.json should record project/namespace so cross-run aggregation can distinguish runs
         val meta = runDir.resolve("meta.json").readText()
         assertThat(meta).contains("\"namespace\":\"$OKD_PROJECT\"")
         assertThat(meta).contains("\"schemaVersion\":1")

@@ -45,14 +45,12 @@ build/<workDir>/diagnostics/
       limitrange.json
       pods.json
       events.json
-      nodes.json                   # (cluster-wide, may be RBAC-denied)
-    snapshot-after/                # same five files, taken at stop
+    snapshot-after/                # same four files, taken at stop
     metrics.jsonl                  # oc adm top pods — per-tick
     pods.jsonl                     # pod phase + restart + last terminated reason/exit
     pod-limits.jsonl               # one-shot: mem/cpu limits per container
     quota.jsonl                    # per-tick quota hard/used
     events.jsonl                   # deduped-by-uid, new events since last tick
-    nodes.jsonl                    # every 6th tick; only non-"Ready=True" conditions
     meta.json                      # project, namespace, gitSha, ftStartTs, ftEndTs, schemaVersion
     degradation.log                # one line per source that became unavailable
     summary.txt                    # post-mortem written at stop
@@ -69,7 +67,6 @@ All fields match the writers in `DiagnosticsCollector.kt`.
 - **`pod-limits.jsonl`** — `{pod, container, node, memLimit, cpuLimit}`. Written once during `writeBeforeSnapshot`. Limits are the raw quantity strings (e.g. `"512Mi"`); the analyzer parses them on demand. (`DiagnosticsCollector.kt:118`)
 - **`quota.jsonl`** — `{ts, name, resource, hard, used}`. One record per (quota × resource) per tick. (`DiagnosticsCollector.kt:218`)
 - **`events.jsonl`** — `{ts, eventTs, type, reason, object, message}`. `object` is `Kind/Name`. Deduped by event UID (`seenEvents` set) so each event appears at most once across the whole run. (`DiagnosticsCollector.kt:270`)
-- **`nodes.jsonl`** — `{ts, node, condition, status}`. `Ready=True` is filtered out (noise); only pressure-type conditions come through. Sampled every 6th tick (≈1/minute at the default period). (`DiagnosticsCollector.kt:296`)
 - **`meta.json`** — `{schemaVersion, project, namespace, gitSha, ftStartTs, ftEndTs}`. `gitSha` is picked up from `GIT_COMMIT` or `BUILD_VCS_NUMBER`. `schemaVersion` is currently `1`. (`DiagnosticsCollector.kt:68`)
 
 ## Classification rules (`summary.txt`)
@@ -88,11 +85,97 @@ Signals (any one of these flips the verdict to YES):
 | `quota-pressure`    | Any `quota.jsonl` sample where `used/hard ≥ 95%` for a `limits.memory` / `memory` / `requests.memory` / CPU equivalent resource.        |
 | `FailedScheduling`  | Any `events.jsonl` row with `reason == "FailedScheduling"`.                                                                             |
 | `Evicted`           | Any `events.jsonl` row with `reason == "Evicted"` or containing `"Evict"`.                                                              |
-| `node-pressure`     | Any `nodes.jsonl` row with `condition ∈ {MemoryPressure, DiskPressure, PIDPressure}` and `status == "True"`.                            |
 
 Thresholds are constants at `PostMortemAnalyzer.kt:16-17` (`QUOTA_PRESSURE_PCT = 95.0`, `MEMORY_NEAR_LIMIT_PCT = 90.0`).
 
-The summary also always contains, regardless of verdict: header with project/namespace/window, pod restart deltas, near-limit details, quota start→end %, up to 10 scheduling-failure events, and a per-node pressure breakdown.
+The summary also always contains, regardless of verdict: header with project/namespace/window, pod restart deltas, near-limit details, quota start→end %, and up to 10 scheduling-failure events.
+
+## Example `summary.txt` outputs
+
+### Healthy run (NO)
+
+```
+FT run post-mortem
+project:   vcs-facade
+namespace: ft-vcs-facade
+window:    2026-04-10T14:00:00Z → 2026-04-10T14:08:32Z (512s)
+
+Namespace quota:
+  - default/limits.memory: 45% → 52% (hard=10Gi)
+  - default/limits.cpu: 30% → 35% (hard=8)
+
+Likely resource problem: NO — no resource-pressure signals detected
+```
+
+No signals. Quota stayed well below thresholds.
+
+### OOMKilled pod (YES)
+
+```
+FT run post-mortem
+project:   vcs-facade
+namespace: ft-vcs-facade
+window:    2026-04-10T14:00:00Z → 2026-04-10T14:12:45Z (765s)
+
+OOMKilled pods:
+  - oc-template-ft-1-0-snapshot-opensearch (peak 489.2MiB / limit 512.0MiB = 96%)
+
+Pods that restarted during the run:
+  - oc-template-ft-1-0-snapshot-opensearch: +1 restart(s)
+
+Pods peaked near their memory limit (≥90%):
+  - oc-template-ft-1-0-snapshot-opensearch: 489.2MiB / 512.0MiB (96%)
+
+Namespace quota:
+  - default/limits.memory: 60% → 68% (hard=10Gi)
+
+Likely resource problem: YES — signals: OOMKill, near-memory-limit
+```
+
+opensearch hit 96% of its 512Mi limit and got killed. Raise the limit or fix the leak.
+
+### Can't schedule + quota full (YES)
+
+```
+FT run post-mortem
+project:   vcs-facade
+namespace: ft-vcs-facade
+window:    2026-04-10T14:00:00Z → 2026-04-10T14:15:03Z (903s)
+
+Namespace quota:
+  - default/limits.memory: 92% → 98% (hard=10Gi)
+  - default/limits.cpu: 88% → 96% (hard=8)
+
+FailedScheduling events:
+  - Pod/oc-template-ft-1-0-snapshot-bitbucket: 0/6 nodes are available: 3 Insufficient memory, 3 node(s) had taint
+  - Pod/oc-template-ft-1-0-snapshot-vcs-facade: 0/6 nodes are available: 3 Insufficient memory, 3 node(s) had taint
+
+Likely resource problem: YES — signals: quota-pressure, FailedScheduling
+```
+
+Two signals: namespace quota at 98% and pods couldn't schedule. This is a namespace capacity problem — raise quota or reduce concurrent services.
+
+### OOMKill without near-limit signal (YES)
+
+```
+FT run post-mortem
+project:   vcs-facade
+namespace: ft-vcs-facade
+window:    2026-04-10T14:00:00Z → 2026-04-10T14:09:17Z (557s)
+
+OOMKilled pods:
+  - oc-template-ft-1-0-snapshot-gitea (peak 450.7MiB / limit 512.0MiB = 88%)
+
+Pods that restarted during the run:
+  - oc-template-ft-1-0-snapshot-gitea: +2 restart(s)
+
+Namespace quota:
+  - default/limits.memory: 70% → 75% (hard=10Gi)
+
+Likely resource problem: YES — signals: OOMKill
+```
+
+Peak was only 88% — below the 90% `near-memory-limit` threshold so that signal didn't fire. But `OOMKill` still did because the pod was killed. The peak metric might have missed the exact spike (10s sampling interval).
 
 ## Configuration
 
@@ -101,7 +184,7 @@ On the `ocTemplate { ... }` extension:
 | Property             | Default     | Effect                                                                     |
 |----------------------|-------------|----------------------------------------------------------------------------|
 | `diagnosticsEnabled` | `true`      | Emergency off switch. Skips service registration entirely when `false`.    |
-| `diagnosticsPeriod`  | `10_000` ms | Poller interval. Nodes are sampled every 6th tick (~1/min at default).     |
+| `diagnosticsPeriod`  | `10_000` ms | Poller interval for streaming samples.                                    |
 
 Enabled by default so every project gets diagnostics with zero config changes.
 
@@ -128,7 +211,6 @@ Every `oc` call in `DiagnosticsCollector` goes through `markDegraded(source, det
 Typical degradations:
 
 - **`metrics`** — `oc adm top` needs metrics-server. If absent or slow, metrics are unavailable but everything else still runs.
-- **`nodes`** — `oc get nodes` is cluster-wide and often RBAC-denied in shared clusters.
 - **`events`** / **`resourcequota`** / **`limitrange`** — rare; RBAC only.
 
 The collector thread's own loop also has a blanket `catch (e: Exception)` around `tick()` in `OcDiagnosticsService.startCollection()` at `src/main/kotlin/org/octopusden/octopus/oc/template/plugins/gradle/service/OcDiagnosticsService.kt:71` — anything that escapes `tick` is debug-logged and swallowed.
@@ -140,8 +222,7 @@ Trust order:
 1. **`OOMKill`** or **`Evicted`** — essentially conclusive. Look at the associated peak-vs-limit % to decide whether to raise the limit or fix a leak.
 2. **`quota-pressure` + `FailedScheduling`** — namespace is out of headroom, not a per-pod problem. Raise quota or reduce concurrent services.
 3. **`near-memory-limit`** alone — a warning, not a diagnosis. The pod didn't die this run, but it's on the edge.
-4. **`node-pressure`** alone — cluster-wide problem, flag to ops.
-5. **`NO`** — trust it *only* if `degradation.log` is empty or only contains `metrics`. A `NO` with `pods`/`events` degraded means the analyzer was flying blind.
+4. **`NO`** — trust it *only* if `degradation.log` is empty or only contains `metrics`. A `NO` with `pods`/`events` degraded means the analyzer was flying blind.
 
 ## Key code references
 

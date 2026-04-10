@@ -26,7 +26,6 @@ class DiagnosticsCollector(
     private val podLimitsFile: File = diagnosticsDir.resolve("pod-limits.jsonl")
     private val quotaFile: File = diagnosticsDir.resolve("quota.jsonl")
     private val eventsFile: File = diagnosticsDir.resolve("events.jsonl")
-    private val nodesFile: File = diagnosticsDir.resolve("nodes.jsonl")
     private val metaFile: File = diagnosticsDir.resolve("meta.json")
     private val degradationLog: File = diagnosticsDir.resolve("degradation.log")
 
@@ -74,9 +73,6 @@ class DiagnosticsCollector(
         samplePods(ts)
         sampleQuota(ts)
         sampleEvents(ts)
-        if (tickIndex % 6 == 0) {
-            sampleNodes(ts)
-        }
     }
 
     private fun writeSnapshotInto(dir: File) {
@@ -85,7 +81,6 @@ class DiagnosticsCollector(
         writeOcJsonTo(dir.resolve("limitrange.json"), listOf("get", "limitrange", "-n", namespace, "-o", "json"), "limitrange")
         writeOcJsonTo(dir.resolve("pods.json"), listOf("get", "pods", "-n", namespace, "-o", "json"), "pods")
         writeOcJsonTo(dir.resolve("events.json"), listOf("get", "events", "-n", namespace, "-o", "json"), "events")
-        writeOcJsonTo(dir.resolve("nodes.json"), listOf("get", "nodes", "-o", "json"), "nodes")
     }
 
     private fun writeOcJsonTo(target: File, args: List<String>, source: String) {
@@ -275,39 +270,6 @@ class DiagnosticsCollector(
         appendText(eventsFile, sb.toString())
     }
 
-    private fun sampleNodes(ts: String) {
-        val jsonpath = "{range .items[*]}{.metadata.name}{\"\\t\"}" +
-            "{range .status.conditions[*]}{.type}{\"=\"}{.status}{\";\"}{end}{\"\\n\"}{end}"
-        val result = ocRunner.run(listOf("get", "nodes", "-o", "jsonpath=$jsonpath"), DEFAULT_TIMEOUT_MS)
-        if (result.exitCode != 0) {
-            markDegraded("nodes", "exit=${result.exitCode}")
-            return
-        }
-        val sb = StringBuilder()
-        result.stdout.lineSequence().forEach { line ->
-            if (line.isBlank()) return@forEach
-            val parts = line.split("\t", limit = 2)
-            if (parts.size < 2) return@forEach
-            val node = parts[0]
-            parts[1].split(";").forEach { c ->
-                if (c.isBlank()) return@forEach
-                val eq = c.indexOf('=')
-                if (eq <= 0) return@forEach
-                val type = c.substring(0, eq)
-                val status = c.substring(eq + 1)
-                // Only record pressure-type conditions; "Ready=True" is noise.
-                if (type == "Ready" && status == "True") return@forEach
-                sb.append("{")
-                    .append(jsonField("ts", ts)).append(",")
-                    .append(jsonField("node", node)).append(",")
-                    .append(jsonField("condition", type)).append(",")
-                    .append(jsonField("status", status))
-                    .append("}\n")
-            }
-        }
-        appendText(nodesFile, sb.toString())
-    }
-
     private fun appendText(file: File, text: String) {
         if (text.isEmpty()) return
         try {
@@ -328,7 +290,7 @@ class DiagnosticsCollector(
     }
 
     companion object {
-        private const val DEFAULT_TIMEOUT_MS = 15_000L
+        private const val DEFAULT_TIMEOUT_MS = 60_000L
 
         internal fun parseCpuMillicores(s: String): Long {
             val t = s.trim()

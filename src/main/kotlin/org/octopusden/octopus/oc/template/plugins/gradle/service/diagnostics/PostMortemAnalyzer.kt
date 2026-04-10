@@ -23,7 +23,6 @@ object PostMortemAnalyzer {
         val pods = readJsonlLines(diagnosticsDir.resolve("pods.jsonl"))
         val quota = readJsonlLines(diagnosticsDir.resolve("quota.jsonl"))
         val events = readJsonlLines(diagnosticsDir.resolve("events.jsonl"))
-        val nodes = readJsonlLines(diagnosticsDir.resolve("nodes.jsonl"))
 
         val signals = mutableListOf<String>()
         val lines = mutableListOf<String>()
@@ -164,23 +163,6 @@ object PostMortemAnalyzer {
             lines += "Eviction events:"
             evictions.take(10).forEach { e ->
                 lines += "  - ${e["object"]}: ${e["message"]}"
-            }
-            lines += ""
-        }
-
-        // Node conditions
-        val pressureConditions = nodes.filter {
-            val cond = it["condition"] ?: ""
-            val status = it["status"] ?: ""
-            (cond == "MemoryPressure" || cond == "DiskPressure" || cond == "PIDPressure") && status == "True"
-        }
-        if (pressureConditions.isNotEmpty()) {
-            signals += "node-pressure"
-            val byNode = pressureConditions.groupBy { it["node"].orEmpty() }
-            lines += "Node pressure observed:"
-            byNode.forEach { (node, samples) ->
-                val conds = samples.mapNotNull { it["condition"] }.toSet().joinToString(",")
-                lines += "  - $node: $conds"
             }
             lines += ""
         }
