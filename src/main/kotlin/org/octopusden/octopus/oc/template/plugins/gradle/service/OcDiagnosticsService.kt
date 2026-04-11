@@ -61,6 +61,13 @@ abstract class OcDiagnosticsService : BuildService<OcDiagnosticsService.Paramete
             val period = parameters.diagnosticsPeriod.getOrElse(10_000L)
             val t = Thread {
                 var tickIndex = 0
+                // Run the first tick immediately so that even short-lived FT
+                // runs produce at least one set of JSONL samples.
+                try {
+                    c.tick(tickIndex++)
+                } catch (e: Exception) {
+                    logger.debug("diagnostics tick failed: ${e.message}")
+                }
                 while (!Thread.currentThread().isInterrupted) {
                     try {
                         Thread.sleep(period)
