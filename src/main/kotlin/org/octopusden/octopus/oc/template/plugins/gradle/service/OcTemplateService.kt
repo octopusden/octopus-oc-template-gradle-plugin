@@ -265,72 +265,83 @@ abstract class OcTemplateService @Inject constructor(
         stopLogStreaming()
         podResources.forEach { resource ->
             val logFile = logs.file("$resource.log").asFile
-            val snapshot = ByteArrayOutputStream()
-            val result = execOperations.exec {
-                it.setCommandLine("oc", "logs", "-n", namespace, resource)
-                it.standardOutput = snapshot
-                it.isIgnoreExitValue = true
+            if (logFile.exists() && logFile.length() > 0) {
+                logger.info("Keeping streaming log for '$resource' (${logFile.length()} bytes)")
+                return@forEach
             }
-            val snapshotBytes = snapshot.toByteArray()
-            if (result.exitValue == 0 && snapshotBytes.isNotEmpty()) {
-                logFile.writeBytes(snapshotBytes)
-            } else if (logFile.exists() && logFile.length() > 0) {
-                logger.info("oc logs failed or empty for '$resource', keeping streaming log")
-            } else {
-                logFile.writeBytes(snapshotBytes)
+            logFile.outputStream().use { outputStream ->
+                execOperations.exec {
+                    it.setCommandLine("oc", "logs", "-n", namespace, resource, "--all-containers")
+                    it.standardOutput = outputStream
+                    it.isIgnoreExitValue = true
+                }
             }
         }
     }
 
     private fun startLogStreaming() {
         val pods = podResources.toList()
+        val currentPodSet = pods.toSet()
+
+        // Clean up threads for pods that no longer exist
+        val stalePods = streamingThreads.keys.filter { it !in currentPodSet }
+        stalePods.forEach { stalePod ->
+            streamingProcesses.remove(stalePod)?.destroyForcibly()
+            streamingThreads.remove(stalePod)?.interrupt()
+        }
+
         pods.forEach { podName ->
-            if (streamingProcesses.containsKey(podName)) return@forEach
             val logFile = logs.file("$podName.log").asFile
             val thread = Thread {
                 streamLogForPod(podName, logFile)
             }.apply {
                 isDaemon = true
                 name = "log-stream-$podName"
-                start()
             }
-            streamingThreads[podName] = thread
+            if (streamingThreads.putIfAbsent(podName, thread) == null) {
+                thread.start()
+            }
         }
     }
 
     private fun streamLogForPod(podName: String, logFile: File) {
-        val maxRetries = 10
-        val retryDelay = 3000L
-        for (attempt in 1..maxRetries) {
-            if (Thread.currentThread().isInterrupted) return
-            try {
-                val process = ProcessBuilder(
-                    "oc", "logs", "-f", podName, "--all-containers", "-n", namespace
-                ).redirectErrorStream(true).start()
-                streamingProcesses[podName] = process
-                process.inputStream.use { input ->
-                    logFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                val exitCode = process.waitFor()
-                if (exitCode == 0) return
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-                return
-            } catch (e: Exception) {
-                logger.debug("Log streaming attempt $attempt/$maxRetries for '$podName' failed: ${e.message}")
-            }
-            if (attempt < maxRetries) {
+        try {
+            val maxRetries = 10
+            val retryDelay = 3000L
+            for (attempt in 1..maxRetries) {
+                if (Thread.currentThread().isInterrupted) return
                 try {
-                    Thread.sleep(retryDelay)
+                    val process = ProcessBuilder(
+                        "oc", "logs", "-f", podName, "--all-containers", "-n", namespace
+                    ).redirectErrorStream(true).start()
+                    streamingProcesses[podName] = process
+                    process.inputStream.use { input ->
+                        java.io.FileOutputStream(logFile, attempt > 1).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    val exitCode = process.waitFor()
+                    if (exitCode == 0) return
                 } catch (_: InterruptedException) {
                     Thread.currentThread().interrupt()
                     return
+                } catch (e: Exception) {
+                    logger.debug("Log streaming attempt $attempt/$maxRetries for '$podName' failed: ${e.message}")
+                }
+                if (attempt < maxRetries) {
+                    try {
+                        Thread.sleep(retryDelay)
+                    } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        return
+                    }
                 }
             }
+            logger.debug("Log streaming for '$podName' gave up after $maxRetries attempts")
+        } finally {
+            streamingProcesses.remove(podName)
+            streamingThreads.remove(podName)
         }
-        logger.debug("Log streaming for '$podName' gave up after $maxRetries attempts")
     }
 
     private fun stopLogStreaming() {

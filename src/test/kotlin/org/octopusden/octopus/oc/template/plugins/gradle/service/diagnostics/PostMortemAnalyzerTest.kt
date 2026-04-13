@@ -73,6 +73,22 @@ class PostMortemAnalyzerTest {
     }
 
     @Test
+    fun `detects CPU quota pressure`(@TempDir dir: File) {
+        writeMeta(dir, "proj-cpu", "ns-cpu")
+        dir.resolve("pod-limits.jsonl").writeText("")
+        dir.resolve("metrics.jsonl").writeText("")
+        dir.resolve("pods.jsonl").writeText("")
+        dir.resolve("quota.jsonl").writeText(
+            """{"ts":"2026-04-09T14:00:00Z","name":"default","resource":"limits.cpu","hard":"4","used":"3900m"}""" + "\n"
+        )
+        dir.resolve("events.jsonl").writeText("")
+
+        val summary = PostMortemAnalyzer.analyze(dir)
+        assertThat(summary).contains("Likely resource problem: YES")
+        assertThat(summary).contains("quota-pressure")
+    }
+
+    @Test
     fun `parseFlatJsonObject handles strings and numbers`() {
         val parsed = PostMortemAnalyzer.parseFlatJsonObject(
             """{"pod":"abc","cpu_m":120,"mem_bytes":104857600,"reason":""}"""

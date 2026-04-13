@@ -12,6 +12,7 @@ import org.octopusden.octopus.oc.template.plugins.gradle.service.OcTemplateServi
 import org.octopusden.octopus.oc.template.plugins.gradle.service.OcTemplateServiceDependencyGraph
 import org.octopusden.octopus.oc.template.plugins.gradle.service.OcTemplateServiceRegistry
 import org.octopusden.octopus.oc.template.plugins.gradle.service.dto.OcTemplateServiceParametersDTO
+import org.octopusden.octopus.oc.template.plugins.gradle.tasks.BaseOcTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcCreateTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcDeleteTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcLogsTask
@@ -100,33 +101,29 @@ class OcTaskConfiguration {
         ocCreateTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
-            task.diagnosticsEnabled.set(ocTemplateSettings.diagnosticsEnabled)
-            if (ocDiagnosticsServiceProvider != null) {
-                task.diagnosticsService.set(ocDiagnosticsServiceProvider)
-                task.usesService(ocDiagnosticsServiceProvider)
-            }
+            wireDiagnostics(task)
             task.dependsOn(ocProcessTask)
         }
         ocLogsTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
-            task.diagnosticsEnabled.set(ocTemplateSettings.diagnosticsEnabled)
-            if (ocDiagnosticsServiceProvider != null) {
-                task.diagnosticsService.set(ocDiagnosticsServiceProvider)
-                task.usesService(ocDiagnosticsServiceProvider)
-            }
+            wireDiagnostics(task)
         }
         ocDeleteTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
-            task.diagnosticsEnabled.set(ocTemplateSettings.diagnosticsEnabled)
-            if (ocDiagnosticsServiceProvider != null) {
-                task.diagnosticsService.set(ocDiagnosticsServiceProvider)
-                task.usesService(ocDiagnosticsServiceProvider)
-            }
+            wireDiagnostics(task)
             // mustRunAfter ensures logs run before delete when both are scheduled (e.g., as finalizers)
             // but doesn't force dependency when ocDelete is run independently
             task.mustRunAfter(ocLogsTask)
+        }
+    }
+
+    private void wireDiagnostics(BaseOcTask task) {
+        task.diagnosticsEnabled.set(ocTemplateSettings.diagnosticsEnabled)
+        if (ocDiagnosticsServiceProvider != null) {
+            task.diagnosticsService.set(ocDiagnosticsServiceProvider)
+            task.usesService(ocDiagnosticsServiceProvider)
         }
     }
 

@@ -67,7 +67,7 @@ class DiagnosticsCollector(
         metaFile.writeText(json)
     }
 
-    fun tick(tickIndex: Int) {
+    fun tick() {
         val ts = Instant.now().toString()
         sampleMetrics(ts)
         samplePods(ts)
@@ -193,55 +193,100 @@ class DiagnosticsCollector(
     }
 
     private fun sampleQuota(ts: String) {
-        val jsonpath = "{range .items[*]}{.metadata.name}{\"\\n\"}" +
-            "{range \$k,\$v := .status.hard}{\"H\\t\"}{\$k}{\"\\t\"}{\$v}{\"\\n\"}{end}" +
-            "{range \$k,\$v := .status.used}{\"U\\t\"}{\$k}{\"\\t\"}{\$v}{\"\\n\"}{end}" +
-            "{\"---\\n\"}{end}"
-        val result = ocRunner.run(listOf("get", "resourcequota", "-n", namespace, "-o", "jsonpath=$jsonpath"), DEFAULT_TIMEOUT_MS)
+        val result = ocRunner.run(listOf("get", "resourcequota", "-n", namespace, "-o", "json"), DEFAULT_TIMEOUT_MS)
         if (result.exitCode != 0) {
             markDegraded("quota", "exit=${result.exitCode}")
             return
         }
         val sb = StringBuilder()
-        var currentName = ""
-        val hard = mutableMapOf<String, String>()
-        val used = mutableMapOf<String, String>()
-        fun flush() {
-            if (currentName.isEmpty()) return
+        val json = result.stdout
+        // Parse each item's metadata.name, status.hard, and status.used from the JSON list.
+        // Structure: {"items":[{"metadata":{"name":"..."},"status":{"hard":{...},"used":{...}}},...]}
+        fun indexOf(target: String, from: Int): Int = json.indexOf(target, from)
+
+        val itemsIdx = indexOf("\"items\"", 0)
+        if (itemsIdx < 0) return
+
+        var searchFrom = itemsIdx
+        while (true) {
+            val metaIdx = indexOf("\"metadata\"", searchFrom)
+            if (metaIdx < 0) break
+
+            val nameKeyIdx = indexOf("\"name\"", metaIdx)
+            if (nameKeyIdx < 0) break
+            val quotaName = extractJsonStringValue(json, nameKeyIdx)
+
+            val statusIdx = indexOf("\"status\"", nameKeyIdx)
+            if (statusIdx < 0) break
+
+            val nextMetaIdx = indexOf("\"metadata\"", statusIdx)
+            val itemEnd = if (nextMetaIdx > 0) nextMetaIdx else json.length
+
+            val hardIdx = indexOf("\"hard\"", statusIdx)
+            val usedIdx = indexOf("\"used\"", statusIdx)
+            val hard = if (hardIdx in statusIdx until itemEnd) extractFlatMap(json, hardIdx) else emptyMap()
+            val used = if (usedIdx in statusIdx until itemEnd) extractFlatMap(json, usedIdx) else emptyMap()
+
             val keys = hard.keys + used.keys
             keys.forEach { k ->
                 sb.append("{")
                     .append(jsonField("ts", ts)).append(",")
-                    .append(jsonField("name", currentName)).append(",")
+                    .append(jsonField("name", quotaName)).append(",")
                     .append(jsonField("resource", k)).append(",")
                     .append(jsonField("hard", hard[k].orEmpty())).append(",")
                     .append(jsonField("used", used[k].orEmpty()))
                     .append("}\n")
             }
+
+            searchFrom = if (nextMetaIdx > 0) nextMetaIdx else break
         }
-        result.stdout.lineSequence().forEach { line ->
-            when {
-                line == "---" -> {
-                    flush()
-                    currentName = ""
-                    hard.clear()
-                    used.clear()
-                }
-                line.startsWith("H\t") -> {
-                    val parts = line.split("\t")
-                    if (parts.size >= 3) hard[parts[1]] = parts[2]
-                }
-                line.startsWith("U\t") -> {
-                    val parts = line.split("\t")
-                    if (parts.size >= 3) used[parts[1]] = parts[2]
-                }
-                line.isNotBlank() -> {
-                    if (currentName.isEmpty()) currentName = line
-                }
+        appendText(quotaFile, sb.toString())
+    }
+
+    private fun extractJsonStringValue(json: String, keyIdx: Int): String {
+        val colonIdx = json.indexOf(':', keyIdx + 1)
+        if (colonIdx < 0) return ""
+        val quoteStart = json.indexOf('"', colonIdx + 1)
+        if (quoteStart < 0) return ""
+        val quoteEnd = json.indexOf('"', quoteStart + 1)
+        if (quoteEnd < 0) return ""
+        return json.substring(quoteStart + 1, quoteEnd)
+    }
+
+    private fun extractFlatMap(json: String, keyIdx: Int): Map<String, String> {
+        val braceStart = json.indexOf('{', keyIdx)
+        if (braceStart < 0) return emptyMap()
+
+        var depth = 0
+        var braceEnd = -1
+        for (i in braceStart until json.length) {
+            when (json[i]) {
+                '{' -> depth++
+                '}' -> { depth--; if (depth == 0) { braceEnd = i; break } }
             }
         }
-        flush()
-        appendText(quotaFile, sb.toString())
+        if (braceEnd < 0) return emptyMap()
+        val block = json.substring(braceStart, braceEnd + 1)
+
+        val result = mutableMapOf<String, String>()
+        var i = 0
+        while (i < block.length) {
+            val qs = block.indexOf('"', i)
+            if (qs < 0) break
+            val qe = block.indexOf('"', qs + 1)
+            if (qe < 0) break
+            val key = block.substring(qs + 1, qe)
+            val colon = block.indexOf(':', qe + 1)
+            if (colon < 0) break
+
+            val vs = block.indexOf('"', colon + 1)
+            if (vs < 0) break
+            val ve = block.indexOf('"', vs + 1)
+            if (ve < 0) break
+            result[key] = block.substring(vs + 1, ve)
+            i = ve + 1
+        }
+        return result
     }
 
     private fun sampleEvents(ts: String) {

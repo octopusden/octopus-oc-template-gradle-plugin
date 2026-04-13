@@ -13,7 +13,7 @@ import java.time.Instant
  * with hand-crafted fixture files.
  */
 object PostMortemAnalyzer {
-  private const val QUOTA_PRESSURE_PCT = 95.0
+    private const val QUOTA_PRESSURE_PCT = 95.0
     private const val MEMORY_NEAR_LIMIT_PCT = 90.0
 
     fun analyze(diagnosticsDir: File): String {
@@ -117,12 +117,17 @@ object PostMortemAnalyzer {
             val r = it["resource"] ?: ""
             r == "limits.cpu" || r == "cpu" || r == "requests.cpu"
         }
-        val quotaPressure = (memQuotaSamples + cpuQuotaSamples).any { sample ->
+        val memQuotaPressure = memQuotaSamples.any { sample ->
             val used = DiagnosticsCollector.parseMemoryBytes(sample["used"] ?: "")
             val hard = DiagnosticsCollector.parseMemoryBytes(sample["hard"] ?: "")
             hard > 0 && (used * 100.0 / hard) >= QUOTA_PRESSURE_PCT
         }
-        if (quotaPressure) signals += "quota-pressure"
+        val cpuQuotaPressure = cpuQuotaSamples.any { sample ->
+            val used = DiagnosticsCollector.parseCpuMillicores(sample["used"] ?: "")
+            val hard = DiagnosticsCollector.parseCpuMillicores(sample["hard"] ?: "")
+            hard > 0 && (used * 100.0 / hard) >= QUOTA_PRESSURE_PCT
+        }
+        if (memQuotaPressure || cpuQuotaPressure) signals += "quota-pressure"
 
         if (memQuotaSamples.isNotEmpty() || cpuQuotaSamples.isNotEmpty()) {
             lines += "Namespace quota:"
@@ -134,9 +139,11 @@ object PostMortemAnalyzer {
                     val resource = first["resource"] ?: "?"
                     val name = first["name"] ?: "?"
                     val hard = first["hard"] ?: "?"
+                    val isCpu = resource.contains("cpu")
+                    fun parse(v: String): Long = if (isCpu) DiagnosticsCollector.parseCpuMillicores(v) else DiagnosticsCollector.parseMemoryBytes(v)
                     fun pct(used: String, hard: String): String {
-                        val u = DiagnosticsCollector.parseMemoryBytes(used)
-                        val h = DiagnosticsCollector.parseMemoryBytes(hard)
+                        val u = parse(used)
+                        val h = parse(hard)
                         return if (h > 0) "${"%.0f".format(u * 100.0 / h)}%" else "?"
                     }
                     val startPct = pct(first["used"] ?: "", hard)

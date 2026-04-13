@@ -33,6 +33,30 @@ abstract class BaseOcTask extends DefaultTask {
         description = descriptionText
     }
 
+    protected void startDiagnosticsBeforeAction() {
+        doFirst {
+            if (diagnosticsEnabled.getOrElse(true) && diagnosticsService.isPresent()) {
+                try {
+                    diagnosticsService.get().startCollection()
+                } catch (Throwable t) {
+                    logger.warn("Failed to start OKD diagnostics: ${t.message}")
+                }
+            }
+        }
+    }
+
+    protected void stopDiagnosticsBeforeAction() {
+        doFirst {
+            if (diagnosticsEnabled.getOrElse(true) && diagnosticsService.isPresent()) {
+                try {
+                    diagnosticsService.get().stopCollection()
+                } catch (Throwable t) {
+                    logger.warn("Failed to stop OKD diagnostics: ${t.message}")
+                }
+            }
+        }
+    }
+
     @TaskAction
     final void process() {
         serviceNames.get().each { name ->
