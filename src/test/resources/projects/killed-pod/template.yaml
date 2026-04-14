@@ -17,7 +17,7 @@ objects:
           command:
             - /bin/sh
             - -c
-            - "echo STREAMING_CAPTURE_MARKER && sleep 3600"
+            - "while true; do echo STREAMING_CAPTURE_MARKER; sleep 1; done"
 parameters:
   - description: Docker registry
     name: DOCKER_REGISTRY

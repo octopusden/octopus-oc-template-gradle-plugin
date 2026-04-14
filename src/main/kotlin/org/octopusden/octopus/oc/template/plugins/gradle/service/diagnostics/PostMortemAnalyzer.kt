@@ -1,5 +1,6 @@
 package org.octopusden.octopus.oc.template.plugins.gradle.service.diagnostics
 
+import groovy.json.JsonSlurper
 import java.io.File
 import java.time.Duration
 import java.time.Instant
@@ -189,6 +190,8 @@ object PostMortemAnalyzer {
     }
 
 
+    private val slurper = JsonSlurper()
+
     internal fun readJsonlLines(file: File): List<Map<String, String>> {
         if (!file.exists()) return emptyList()
         val result = mutableListOf<Map<String, String>>()
@@ -196,7 +199,7 @@ object PostMortemAnalyzer {
             seq.forEach { line ->
                 val trimmed = line.trim()
                 if (trimmed.isEmpty() || !trimmed.startsWith("{")) return@forEach
-                result += parseFlatJsonObject(trimmed)
+                result += parseJsonLine(trimmed)
             }
         }
         return result
@@ -204,89 +207,17 @@ object PostMortemAnalyzer {
 
     internal fun parseMetaJson(file: File): Map<String, String> {
         if (!file.exists()) return emptyMap()
-        return parseFlatJsonObject(file.readText().trim())
+        return parseJsonLine(file.readText().trim())
     }
 
-    internal fun parseFlatJsonObject(src: String): Map<String, String> {
-        val out = mutableMapOf<String, String>()
-        var i = 0
-        val n = src.length
-        // Expect leading '{'
-        while (i < n && src[i] != '{') i++
-        if (i >= n) return out
-        i++ // past '{'
-
-        fun skipWs() {
-            while (i < n && (src[i] == ' ' || src[i] == '\t' || src[i] == '\n' || src[i] == '\r')) i++
+    @Suppress("UNCHECKED_CAST")
+    internal fun parseJsonLine(src: String): Map<String, String> {
+        return try {
+            val parsed = slurper.parseText(src) as? Map<String, Any?> ?: return emptyMap()
+            parsed.mapValues { (_, v) -> v?.toString().orEmpty() }
+        } catch (_: Exception) {
+            emptyMap()
         }
-
-        fun readString(): String {
-            // current char should be '"'
-            if (i >= n || src[i] != '"') return ""
-            i++
-            val sb = StringBuilder()
-            while (i < n) {
-                val c = src[i]
-                if (c == '\\' && i + 1 < n) {
-                    val nxt = src[i + 1]
-                    when (nxt) {
-                        '"' -> sb.append('"')
-                        '\\' -> sb.append('\\')
-                        '/' -> sb.append('/')
-                        'n' -> sb.append('\n')
-                        'r' -> sb.append('\r')
-                        't' -> sb.append('\t')
-                        'b' -> sb.append('\b')
-                        'f' -> sb.append('\u000C')
-                        'u' -> {
-                            if (i + 5 < n) {
-                                val hex = src.substring(i + 2, i + 6)
-                                val code = hex.toIntOrNull(16) ?: 0
-                                sb.append(code.toChar())
-                                i += 4
-                            }
-                        }
-                        else -> sb.append(nxt)
-                    }
-                    i += 2
-                } else if (c == '"') {
-                    i++
-                    return sb.toString()
-                } else {
-                    sb.append(c)
-                    i++
-                }
-            }
-            return sb.toString()
-        }
-
-        fun readNumber(): String {
-            val start = i
-            while (i < n) {
-                val c = src[i]
-                if (c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E' || c in '0'..'9') i++ else break
-            }
-            return src.substring(start, i)
-        }
-
-        while (i < n) {
-            skipWs()
-            if (i >= n || src[i] == '}') break
-            if (src[i] != '"') { i++; continue }
-            val key = readString()
-            skipWs()
-            if (i < n && src[i] == ':') i++
-            skipWs()
-            if (i >= n) break
-            val value = when (src[i]) {
-                '"' -> readString()
-                else -> readNumber()
-            }
-            out[key] = value
-            skipWs()
-            if (i < n && src[i] == ',') i++
-        }
-        return out
     }
 
     private fun humanBytes(bytes: Long): String {

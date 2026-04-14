@@ -6,7 +6,6 @@
 
 The fix: as soon as a managed pod appears, start `oc logs -f` in a background thread and pipe its output straight into the final log file. If the pod dies before `OcLogsTask` runs, the file is already populated and we simply don't overwrite it.
 
-(Feature added in commit `922f37e`.)
 
 ## Lifecycle
 

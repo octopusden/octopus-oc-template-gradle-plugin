@@ -246,7 +246,8 @@ class OcTemplatePluginTest {
         val logFile = projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("killable-pod")}").toFile()
         assertThat(logFile).exists()
         assertThat(logFile).isNotEmpty()
-        assertThat(logFile.readText()).contains("STREAMING_CAPTURE_MARKER")
+        val markerCount = logFile.readText().split("STREAMING_CAPTURE_MARKER").size - 1
+        assertThat(markerCount).isGreaterThan(3)
         assertThat(instance.stdOut).anySatisfy {
             assertThat(it).contains("keeping streaming log")
         }

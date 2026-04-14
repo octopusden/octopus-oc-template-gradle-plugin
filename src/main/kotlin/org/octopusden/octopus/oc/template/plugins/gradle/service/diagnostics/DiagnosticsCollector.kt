@@ -1,5 +1,6 @@
 package org.octopusden.octopus.oc.template.plugins.gradle.service.diagnostics
 
+import groovy.json.JsonSlurper
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -93,28 +94,22 @@ class DiagnosticsCollector(
     }
 
     private fun capturePodLimits() {
-        val jsonpath = "{range .items[*]}{.metadata.name}{\"\\t\"}{.spec.nodeName}{\"\\t\"}" +
-            "{range .spec.containers[*]}{.name}{\"=\"}{.resources.limits.memory}{\",\"}{.resources.limits.cpu}{\";\"}{end}{\"\\n\"}{end}"
-        val result = ocRunner.run(listOf("get", "pods", "-n", namespace, "-o", "jsonpath=$jsonpath"), DEFAULT_TIMEOUT_MS)
-        if (result.exitCode != 0) {
-            markDegraded("pod-limits", "exit=${result.exitCode}")
-            return
-        }
+        val items = fetchItems("pods", "pod-limits") ?: return
         val sb = StringBuilder()
-        result.stdout.lineSequence().forEach { line ->
-            if (line.isBlank()) return@forEach
-            val parts = line.split("\t")
-            if (parts.size < 3) return@forEach
-            val pod = parts[0]
-            val node = parts[1]
-            parts[2].split(";").forEach { c ->
-                if (c.isBlank()) return@forEach
-                val eq = c.indexOf('=')
-                if (eq <= 0) return@forEach
-                val containerName = c.substring(0, eq)
-                val limits = c.substring(eq + 1).split(",")
-                val memLimit = limits.getOrNull(0).orEmpty()
-                val cpuLimit = limits.getOrNull(1).orEmpty()
+        for (item in items) {
+            val obj = item as? Map<*, *> ?: continue
+            val metadata = obj["metadata"] as? Map<*, *> ?: continue
+            val pod = metadata["name"]?.toString() ?: continue
+            val spec = obj["spec"] as? Map<*, *> ?: continue
+            val node = spec["nodeName"]?.toString().orEmpty()
+            val containers = spec["containers"] as? List<*> ?: continue
+            for (c in containers) {
+                val cMap = c as? Map<*, *> ?: continue
+                val containerName = cMap["name"]?.toString().orEmpty()
+                val resources = cMap["resources"] as? Map<*, *>
+                val limits = resources?.get("limits") as? Map<*, *>
+                val memLimit = limits?.get("memory")?.toString().orEmpty()
+                val cpuLimit = limits?.get("cpu")?.toString().orEmpty()
                 sb.append("{")
                     .append(jsonField("pod", pod)).append(",")
                     .append(jsonField("container", containerName)).append(",")
@@ -152,37 +147,33 @@ class DiagnosticsCollector(
     }
 
     private fun samplePods(ts: String) {
-        val jsonpath = "{range .items[*]}{.metadata.name}{\"\\t\"}{.status.phase}{\"\\t\"}" +
-            "{range .status.containerStatuses[*]}{.restartCount}{\",\"}{.lastState.terminated.reason}{\",\"}{.lastState.terminated.exitCode}{\";\"}{end}{\"\\n\"}{end}"
-        val result = ocRunner.run(listOf("get", "pods", "-n", namespace, "-o", "jsonpath=$jsonpath"), DEFAULT_TIMEOUT_MS)
-        if (result.exitCode != 0) {
-            markDegraded("pods", "exit=${result.exitCode}")
-            return
-        }
+        val items = fetchItems("pods", "pods") ?: return
         val sb = StringBuilder()
-        result.stdout.lineSequence().forEach { line ->
-            if (line.isBlank()) return@forEach
-            val parts = line.split("\t")
-            if (parts.size < 2) return@forEach
-            val pod = parts[0]
-            val phase = parts[1]
+        for (item in items) {
+            val obj = item as? Map<*, *> ?: continue
+            val metadata = obj["metadata"] as? Map<*, *> ?: continue
+            val podName = metadata["name"]?.toString() ?: continue
+            val status = obj["status"] as? Map<*, *> ?: continue
+            val phase = status["phase"]?.toString().orEmpty()
+            val containerStatuses = status["containerStatuses"] as? List<*> ?: emptyList<Any>()
+
             var totalRestarts = 0
             var lastReason = ""
             var lastExit = ""
-            if (parts.size >= 3) {
-                parts[2].split(";").forEach { c ->
-                    if (c.isBlank()) return@forEach
-                    val fields = c.split(",")
-                    totalRestarts += fields.getOrNull(0)?.toIntOrNull() ?: 0
-                    val reason = fields.getOrNull(1).orEmpty()
-                    if (reason.isNotEmpty()) lastReason = reason
-                    val exit = fields.getOrNull(2).orEmpty()
-                    if (exit.isNotEmpty()) lastExit = exit
-                }
+            for (cs in containerStatuses) {
+                val csMap = cs as? Map<*, *> ?: continue
+                totalRestarts += (csMap["restartCount"] as? Number)?.toInt() ?: 0
+                val lastState = csMap["lastState"] as? Map<*, *> ?: continue
+                val terminated = lastState["terminated"] as? Map<*, *> ?: continue
+                val reason = terminated["reason"]?.toString().orEmpty()
+                if (reason.isNotEmpty()) lastReason = reason
+                val exit = terminated["exitCode"]?.toString().orEmpty()
+                if (exit.isNotEmpty()) lastExit = exit
             }
+
             sb.append("{")
                 .append(jsonField("ts", ts)).append(",")
-                .append(jsonField("pod", pod)).append(",")
+                .append(jsonField("pod", podName)).append(",")
                 .append(jsonField("phase", phase)).append(",")
                 .append(jsonField("restartCount", totalRestarts)).append(",")
                 .append(jsonField("lastTerminatedReason", lastReason)).append(",")
@@ -193,100 +184,48 @@ class DiagnosticsCollector(
     }
 
     private fun sampleQuota(ts: String) {
-        val result = ocRunner.run(listOf("get", "resourcequota", "-n", namespace, "-o", "json"), DEFAULT_TIMEOUT_MS)
-        if (result.exitCode != 0) {
-            markDegraded("quota", "exit=${result.exitCode}")
-            return
-        }
+        val items = fetchItems("resourcequota", "quota") ?: return
         val sb = StringBuilder()
-        val json = result.stdout
-        // Parse each item's metadata.name, status.hard, and status.used from the JSON list.
-        // Structure: {"items":[{"metadata":{"name":"..."},"status":{"hard":{...},"used":{...}}},...]}
-        fun indexOf(target: String, from: Int): Int = json.indexOf(target, from)
+        for (item in items) {
+            val obj = item as? Map<*, *> ?: continue
+            val metadata = obj["metadata"] as? Map<*, *> ?: continue
+            val quotaName = metadata["name"]?.toString() ?: continue
+            val status = obj["status"] as? Map<*, *> ?: continue
+            val hard = status["hard"] as? Map<*, *> ?: emptyMap<Any, Any>()
+            val used = status["used"] as? Map<*, *> ?: emptyMap<Any, Any>()
 
-        val itemsIdx = indexOf("\"items\"", 0)
-        if (itemsIdx < 0) return
-
-        var searchFrom = itemsIdx
-        while (true) {
-            val metaIdx = indexOf("\"metadata\"", searchFrom)
-            if (metaIdx < 0) break
-
-            val nameKeyIdx = indexOf("\"name\"", metaIdx)
-            if (nameKeyIdx < 0) break
-            val quotaName = extractJsonStringValue(json, nameKeyIdx)
-
-            val statusIdx = indexOf("\"status\"", nameKeyIdx)
-            if (statusIdx < 0) break
-
-            val nextMetaIdx = indexOf("\"metadata\"", statusIdx)
-            val itemEnd = if (nextMetaIdx > 0) nextMetaIdx else json.length
-
-            val hardIdx = indexOf("\"hard\"", statusIdx)
-            val usedIdx = indexOf("\"used\"", statusIdx)
-            val hard = if (hardIdx in statusIdx until itemEnd) extractFlatMap(json, hardIdx) else emptyMap()
-            val used = if (usedIdx in statusIdx until itemEnd) extractFlatMap(json, usedIdx) else emptyMap()
-
-            val keys = hard.keys + used.keys
-            keys.forEach { k ->
+            val keys = hard.keys.map { it.toString() } + used.keys.map { it.toString() }
+            keys.toSet().forEach { k ->
                 sb.append("{")
                     .append(jsonField("ts", ts)).append(",")
                     .append(jsonField("name", quotaName)).append(",")
                     .append(jsonField("resource", k)).append(",")
-                    .append(jsonField("hard", hard[k].orEmpty())).append(",")
-                    .append(jsonField("used", used[k].orEmpty()))
+                    .append(jsonField("hard", hard[k]?.toString().orEmpty())).append(",")
+                    .append(jsonField("used", used[k]?.toString().orEmpty()))
                     .append("}\n")
             }
-
-            searchFrom = if (nextMetaIdx > 0) nextMetaIdx else break
         }
         appendText(quotaFile, sb.toString())
     }
 
-    private fun extractJsonStringValue(json: String, keyIdx: Int): String {
-        val colonIdx = json.indexOf(':', keyIdx + 1)
-        if (colonIdx < 0) return ""
-        val quoteStart = json.indexOf('"', colonIdx + 1)
-        if (quoteStart < 0) return ""
-        val quoteEnd = json.indexOf('"', quoteStart + 1)
-        if (quoteEnd < 0) return ""
-        return json.substring(quoteStart + 1, quoteEnd)
+    private fun fetchItems(resource: String, degradedName: String): List<*>? {
+        val result = ocRunner.run(listOf("get", resource, "-n", namespace, "-o", "json"), DEFAULT_TIMEOUT_MS)
+        if (result.exitCode != 0) {
+            markDegraded(degradedName, "exit=${result.exitCode}")
+            return null
+        }
+        val parsed = parseJson(result.stdout) ?: return null
+        return parsed["items"] as? List<*>
     }
 
-    private fun extractFlatMap(json: String, keyIdx: Int): Map<String, String> {
-        val braceStart = json.indexOf('{', keyIdx)
-        if (braceStart < 0) return emptyMap()
-
-        var depth = 0
-        var braceEnd = -1
-        for (i in braceStart until json.length) {
-            when (json[i]) {
-                '{' -> depth++
-                '}' -> { depth--; if (depth == 0) { braceEnd = i; break } }
-            }
+    @Suppress("UNCHECKED_CAST")
+    private fun parseJson(text: String): Map<String, Any?>? {
+        return try {
+            JsonSlurper().parseText(text) as? Map<String, Any?>
+        } catch (e: Exception) {
+            logger.debug("Failed to parse JSON: ${e.message}")
+            null
         }
-        if (braceEnd < 0) return emptyMap()
-        val block = json.substring(braceStart, braceEnd + 1)
-
-        val result = mutableMapOf<String, String>()
-        var i = 0
-        while (i < block.length) {
-            val qs = block.indexOf('"', i)
-            if (qs < 0) break
-            val qe = block.indexOf('"', qs + 1)
-            if (qe < 0) break
-            val key = block.substring(qs + 1, qe)
-            val colon = block.indexOf(':', qe + 1)
-            if (colon < 0) break
-
-            val vs = block.indexOf('"', colon + 1)
-            if (vs < 0) break
-            val ve = block.indexOf('"', vs + 1)
-            if (ve < 0) break
-            result[key] = block.substring(vs + 1, ve)
-            i = ve + 1
-        }
-        return result
     }
 
     private fun sampleEvents(ts: String) {

@@ -89,8 +89,8 @@ class PostMortemAnalyzerTest {
     }
 
     @Test
-    fun `parseFlatJsonObject handles strings and numbers`() {
-        val parsed = PostMortemAnalyzer.parseFlatJsonObject(
+    fun `parseJsonLine handles strings and numbers`() {
+        val parsed = PostMortemAnalyzer.parseJsonLine(
             """{"pod":"abc","cpu_m":120,"mem_bytes":104857600,"reason":""}"""
         )
         assertThat(parsed["pod"]).isEqualTo("abc")
