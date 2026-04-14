@@ -248,8 +248,8 @@ class OcTemplatePluginTest {
         assertThat(logFile).isNotEmpty()
         val markerCount = logFile.readText().split("STREAMING_CAPTURE_MARKER").size - 1
         assertThat(markerCount).isGreaterThan(3)
-        assertThat(instance.stdOut).anySatisfy {
-            assertThat(it).contains("keeping streaming log")
+        assertThat(instance.stdErr).anySatisfy {
+            assertThat(it).contains("Keeping streaming log")
         }
     }
 
