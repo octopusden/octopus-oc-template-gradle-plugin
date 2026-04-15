@@ -265,16 +265,21 @@ abstract class OcTemplateService @Inject constructor(
         stopLogStreaming()
         podResources.forEach { resource ->
             val logFile = logs.file("$resource.log").asFile
-            if (logFile.exists() && logFile.length() > 0) {
-                logger.info("Keeping streaming log for '$resource' (${logFile.length()} bytes)")
-                return@forEach
+            val streamedSize = if (logFile.exists()) logFile.length() else 0L
+
+            val snapshot = ByteArrayOutputStream()
+            val result = execOperations.exec {
+                it.setCommandLine("oc", "logs", "-n", namespace, resource, "--all-containers")
+                it.standardOutput = snapshot
+                it.isIgnoreExitValue = true
             }
-            logFile.outputStream().use { outputStream ->
-                execOperations.exec {
-                    it.setCommandLine("oc", "logs", "-n", namespace, resource, "--all-containers")
-                    it.standardOutput = outputStream
-                    it.isIgnoreExitValue = true
-                }
+
+            if (result.exitValue == 0 && snapshot.size() > 0) {
+                // Snapshot is authoritative (includes any lines emitted after stopLogStreaming)
+                logFile.writeBytes(snapshot.toByteArray())
+            } else if (streamedSize > 0) {
+                // Snapshot failed or empty (e.g. pod was deleted) - keep streamed content
+                logger.info("Keeping streaming log for '$resource' ($streamedSize bytes)")
             }
         }
     }
@@ -316,7 +321,11 @@ abstract class OcTemplateService @Inject constructor(
                     ).redirectErrorStream(true).start()
                     streamingProcesses[podName] = process
                     process.inputStream.use { input ->
-                        java.io.FileOutputStream(logFile, attempt > 1).use { output ->
+                        // Append whenever the file already has content, regardless of which
+                        // thread/attempt captured it. Prevents a restarted streamer from
+                        // truncating data captured by a previous thread for the same pod.
+                        val append = logFile.exists() && logFile.length() > 0
+                        java.io.FileOutputStream(logFile, append).use { output ->
                             input.copyTo(output)
                         }
                     }
