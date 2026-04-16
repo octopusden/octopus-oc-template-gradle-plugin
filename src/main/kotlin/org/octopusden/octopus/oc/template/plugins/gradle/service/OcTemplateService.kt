@@ -12,6 +12,8 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -267,19 +269,25 @@ abstract class OcTemplateService @Inject constructor(
             val logFile = logs.file("$resource.log").asFile
             val streamedSize = if (logFile.exists()) logFile.length() else 0L
 
-            val snapshot = ByteArrayOutputStream()
-            val result = execOperations.exec {
-                it.setCommandLine("oc", "logs", "-n", namespace, resource, "--all-containers")
-                it.standardOutput = snapshot
-                it.isIgnoreExitValue = true
-            }
-
-            if (result.exitValue == 0 && snapshot.size() > 0) {
-                // Snapshot is authoritative (includes any lines emitted after stopLogStreaming)
-                logFile.writeBytes(snapshot.toByteArray())
-            } else if (streamedSize > 0) {
-                // Snapshot failed or empty (e.g. pod was deleted) - keep streamed content
-                logger.info("Keeping streaming log for '$resource' ($streamedSize bytes)")
+            val tempFile = File.createTempFile(resource, ".log", logFile.parentFile)
+            try {
+                tempFile.outputStream().use { os ->
+                    execOperations.exec {
+                        it.setCommandLine("oc", "logs", "-n", namespace, resource, "--all-containers")
+                        it.standardOutput = os
+                        it.isIgnoreExitValue = true
+                    }
+                }
+                when {
+                    tempFile.length() > 0 ->
+                        Files.move(tempFile.toPath(), logFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                    streamedSize > 0 ->
+                        logger.info("Keeping streaming log for '$resource' ($streamedSize bytes)")
+                    else ->
+                        if (!logFile.exists()) logFile.createNewFile()
+                }
+            } finally {
+                tempFile.delete()
             }
         }
     }
@@ -288,7 +296,6 @@ abstract class OcTemplateService @Inject constructor(
         val pods = podResources.toList()
         val currentPodSet = pods.toSet()
 
-        // Clean up threads for pods that no longer exist
         val stalePods = streamingThreads.keys.filter { it !in currentPodSet }
         stalePods.forEach { stalePod ->
             streamingProcesses.remove(stalePod)?.destroyForcibly()
