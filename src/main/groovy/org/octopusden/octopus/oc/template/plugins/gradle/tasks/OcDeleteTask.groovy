@@ -10,6 +10,7 @@ class OcDeleteTask extends BaseOcTask {
     @Inject
     OcDeleteTask() {
         super("Deletes all created resources for cleanup")
+        stopDiagnosticsBeforeAction()
     }
 
     @Override

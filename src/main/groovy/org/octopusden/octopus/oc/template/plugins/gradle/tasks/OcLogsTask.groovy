@@ -10,6 +10,7 @@ abstract class OcLogsTask extends BaseOcTask {
     @Inject
     OcLogsTask() {
         super("Fetches logs from pods for all services")
+        stopDiagnosticsBeforeAction()
     }
 
     @Override

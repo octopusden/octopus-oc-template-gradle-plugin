@@ -1,18 +1,22 @@
 package org.octopusden.octopus.oc.template.plugins.gradle
 
 import groovy.transform.CompileStatic
+import org.gradle.api.Action
 import org.gradle.api.Project
 import org.gradle.api.Task
+import org.gradle.api.provider.Provider
+import org.gradle.api.services.BuildServiceSpec
 import org.gradle.api.tasks.TaskProvider
+import org.octopusden.octopus.oc.template.plugins.gradle.service.OcDiagnosticsService
 import org.octopusden.octopus.oc.template.plugins.gradle.service.OcTemplateService
 import org.octopusden.octopus.oc.template.plugins.gradle.service.OcTemplateServiceDependencyGraph
 import org.octopusden.octopus.oc.template.plugins.gradle.service.OcTemplateServiceRegistry
 import org.octopusden.octopus.oc.template.plugins.gradle.service.dto.OcTemplateServiceParametersDTO
+import org.octopusden.octopus.oc.template.plugins.gradle.tasks.BaseOcTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcCreateTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcDeleteTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcLogsTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcProcessTask
-import javax.inject.Provider
 
 @CompileStatic
 class OcTaskConfiguration {
@@ -24,6 +28,7 @@ class OcTaskConfiguration {
     private final TaskProvider<OcCreateTask> ocCreateTask
     private final TaskProvider<OcLogsTask> ocLogsTask
     private final TaskProvider<OcDeleteTask> ocDeleteTask
+    private Provider<OcDiagnosticsService> ocDiagnosticsServiceProvider
 
     OcTaskConfiguration(OcTemplateSetting ocTemplateSettings, Project project, String name) {
         this.ocTemplateSettings = ocTemplateSettings
@@ -37,11 +42,31 @@ class OcTaskConfiguration {
 
         project.afterEvaluate {
             if (ocTemplateSettings.enabled.get()) {
+                registerDiagnosticsService()
                 registerBuildServices()
                 registerServiceDependencies()
                 configureTasks()
             }
         }
+    }
+
+    private void registerDiagnosticsService() {
+        if (!ocTemplateSettings.diagnosticsEnabled.getOrElse(true)) return
+        String namespace = ocTemplateSettings.namespace.getOrElse("")
+        if (namespace.isEmpty()) return
+        String sanitizedNs = namespace.replaceAll(/[^A-Za-z0-9_-]/, "_")
+        String buildServiceName = "ocDiagnosticsService_${project.name}_$sanitizedNs"
+        String gitSha = System.getenv("GIT_COMMIT") ?: System.getenv("BUILD_VCS_NUMBER") ?: ""
+        ocDiagnosticsServiceProvider = project.gradle.sharedServices.registerIfAbsent(
+            buildServiceName, OcDiagnosticsService.class,
+            { BuildServiceSpec<OcDiagnosticsService.Parameters> spec ->
+                spec.parameters.namespace.set(namespace)
+                spec.parameters.workDir.set(ocTemplateSettings.workDir)
+                spec.parameters.diagnosticsPeriod.set(ocTemplateSettings.diagnosticsPeriod)
+                spec.parameters.projectName.set(project.name)
+                spec.parameters.gitSha.set(gitSha)
+            } as Action<BuildServiceSpec<OcDiagnosticsService.Parameters>>
+        )
     }
 
     private void registerBuildServices() {
@@ -76,18 +101,29 @@ class OcTaskConfiguration {
         ocCreateTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
+            wireDiagnostics(task)
             task.dependsOn(ocProcessTask)
         }
         ocLogsTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
+            wireDiagnostics(task)
         }
         ocDeleteTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
+            wireDiagnostics(task)
             // mustRunAfter ensures logs run before delete when both are scheduled (e.g., as finalizers)
             // but doesn't force dependency when ocDelete is run independently
             task.mustRunAfter(ocLogsTask)
+        }
+    }
+
+    private void wireDiagnostics(BaseOcTask task) {
+        task.diagnosticsEnabled.set(ocTemplateSettings.diagnosticsEnabled)
+        if (ocDiagnosticsServiceProvider != null) {
+            task.diagnosticsService.set(ocDiagnosticsServiceProvider)
+            task.usesService(ocDiagnosticsServiceProvider)
         }
     }
 
