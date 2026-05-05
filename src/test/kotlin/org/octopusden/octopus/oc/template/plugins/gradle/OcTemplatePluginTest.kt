@@ -251,6 +251,26 @@ class OcTemplatePluginTest {
     }
 
     /**
+     * Verifies that for an opt-in service (waitForCompletion=true), the pipeline waits
+     * for the pod to reach phase=Succeeded before logs/delete fire. The captured log
+     * should contain the terminal marker the pod prints just before exiting.
+     */
+    @Test
+    fun testWaitForCompletionGate() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/wait-for-completion-pod"
+            tasks = TASKS
+            additionalArguments = DEFAULT_PARAMETERS
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
+        }
+        assertEquals(0, instance.exitCode)
+        val logFile = projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("completion-pod")}").toFile()
+        assertThat(logFile).exists()
+        assertThat(logFile).isNotEmpty()
+        assertThat(logFile.readText()).contains("COMPLETION_MARKER")
+    }
+
+    /**
      * Verifies that the namespace diagnostics collector runs around an FT-style
      * task (via `isRequiredBy`) and writes its artifacts under <workDir>/diagnostics/.
      * Covers the full lifecycle: before-snapshot, streaming samples, after-snapshot,

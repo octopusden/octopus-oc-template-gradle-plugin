@@ -17,6 +17,7 @@ import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcCreateTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcDeleteTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcLogsTask
 import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcProcessTask
+import org.octopusden.octopus.oc.template.plugins.gradle.tasks.OcWaitTask
 
 @CompileStatic
 class OcTaskConfiguration {
@@ -26,6 +27,7 @@ class OcTaskConfiguration {
     private final OcTemplateServiceDependencyGraph serviceDependencyGraph
     private final TaskProvider<OcProcessTask> ocProcessTask
     private final TaskProvider<OcCreateTask> ocCreateTask
+    private final TaskProvider<OcWaitTask> ocWaitTask
     private final TaskProvider<OcLogsTask> ocLogsTask
     private final TaskProvider<OcDeleteTask> ocDeleteTask
     private Provider<OcDiagnosticsService> ocDiagnosticsServiceProvider
@@ -37,6 +39,7 @@ class OcTaskConfiguration {
         this.serviceDependencyGraph = new OcTemplateServiceDependencyGraph()
         this.ocProcessTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.PROCESS), OcProcessTask)
         this.ocCreateTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.CREATE), OcCreateTask)
+        this.ocWaitTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.WAIT), OcWaitTask)
         this.ocLogsTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.LOGS), OcLogsTask)
         this.ocDeleteTask = project.tasks.register(generateTaskName(name, OcTemplateTaskType.DELETE), OcDeleteTask)
 
@@ -104,10 +107,21 @@ class OcTaskConfiguration {
             wireDiagnostics(task)
             task.dependsOn(ocProcessTask)
         }
+        ocWaitTask.configure { task ->
+            Map<String, OcServiceSetting> allSettings = ocTemplateSettings.getAllServiceSettings()
+            List<String> optIn = serviceDependencyGraph.getOrdered().findAll { String name ->
+                allSettings.get(name)?.waitForCompletion?.getOrElse(false)
+            }
+            task.serviceNames.set(optIn)
+            task.serviceRegistry.set(getServiceRegistry())
+            wireDiagnostics(task)
+            task.mustRunAfter(ocCreateTask)
+        }
         ocLogsTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
             wireDiagnostics(task)
+            task.dependsOn(ocWaitTask)
         }
         ocDeleteTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
@@ -116,6 +130,7 @@ class OcTaskConfiguration {
             // mustRunAfter ensures logs run before delete when both are scheduled (e.g., as finalizers)
             // but doesn't force dependency when ocDelete is run independently
             task.mustRunAfter(ocLogsTask)
+            task.mustRunAfter(ocWaitTask)
         }
     }
 
@@ -133,6 +148,7 @@ class OcTaskConfiguration {
 
     void isRequiredBy(Task task) {
         task.dependsOn { ocCreateTask }
+        task.finalizedBy { ocWaitTask }
         task.finalizedBy { ocLogsTask }
         task.finalizedBy { ocDeleteTask }
     }

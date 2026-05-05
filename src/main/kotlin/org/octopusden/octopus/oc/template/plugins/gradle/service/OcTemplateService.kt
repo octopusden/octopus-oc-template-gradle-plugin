@@ -263,6 +263,41 @@ abstract class OcTemplateService @Inject constructor(
         }
     }
 
+    fun waitTermination() {
+        var counter = 0
+        var consecutiveNoPodChecks = 0
+        val maxConsecutiveNoPodChecks = 3
+        var seenAnyPod = false
+
+        logger.info("Waiting for pod(s) with prefix '$deploymentPrefix-$serviceName' to terminate (phase=Succeeded)...")
+
+        while (counter++ < attempts) {
+            Thread.sleep(period)
+            updateCreatedResources()
+            startLogStreaming()
+
+            val checkResult = checkPodAvailability(consecutiveNoPodChecks, maxConsecutiveNoPodChecks, seenAnyPod)
+            if (checkResult.shouldExit) return
+            consecutiveNoPodChecks = checkResult.consecutiveNoPodChecks
+            seenAnyPod = checkResult.seenAnyPod
+
+            if (podResources.isEmpty()) continue
+
+            val phases = podResources.associateWith { getPodStatus(it)?.phase }
+            val failed = phases.filterValues { it == "Failed" }.keys
+            if (failed.isNotEmpty()) {
+                throw Exception("Pods finished with phase=Failed: $failed")
+            }
+            val terminated = phases.values.all { it == "Succeeded" }
+            if (terminated) {
+                logger.info(">> All pods terminated with phase=Succeeded")
+                return
+            }
+            logger.info(">> Pods not yet terminated, waiting...")
+        }
+        throw Exception("Pods termination wait attempts exceeded")
+    }
+
     fun logs() {
         stopLogStreaming()
         podResources.forEach { resource ->

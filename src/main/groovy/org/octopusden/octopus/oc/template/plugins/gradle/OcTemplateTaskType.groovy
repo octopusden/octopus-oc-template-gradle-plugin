@@ -4,6 +4,7 @@ enum OcTemplateTaskType {
 
     PROCESS("Process"),
     CREATE("Create"),
+    WAIT("Wait"),
     LOGS("Logs"),
     DELETE("Delete")
 
