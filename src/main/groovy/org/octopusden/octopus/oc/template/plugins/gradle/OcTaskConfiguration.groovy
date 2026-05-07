@@ -147,9 +147,9 @@ class OcTaskConfiguration {
 
     void isRequiredBy(Task task) {
         task.dependsOn { ocCreateTask }
-        ocWaitTask.configure { it.finalizedBy(ocLogsTask) }
-        ocLogsTask.configure { it.finalizedBy(ocDeleteTask) }
         task.finalizedBy { ocWaitTask }
+        task.finalizedBy { ocLogsTask }
+        task.finalizedBy { ocDeleteTask }
     }
 
     private OcTemplateServiceRegistry getServiceRegistry() {
