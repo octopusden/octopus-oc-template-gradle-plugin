@@ -5,6 +5,7 @@ This Gradle plugin provides a convenient way to interact with OKD/OpenShift temp
 This plugin automatically generates Gradle tasks to manage OpenShift resources based on your registered services & templates:
 - `ocProcess` - Processes all registered OpenShift templates with parameters
 - `ocCreate` - Creates resources from processed templates for all services
+- `ocWait` - Waits for pods of services with `waitForCompletion=true` to finish their in-pod task and reach `phase=Succeeded` before logs/cleanup run
 - `ocLogs` - Fetches logs from pods for all services
 - `ocDelete` - Deletes all created resources for cleanup
 
@@ -55,8 +56,23 @@ ocTemplate {
         // Ensures that database resource is ready before creating backend resource
         dependsOn.set(listOf("database"))
     }
+
+    // Opt-in: gate `ocLogs` / `ocDelete` behind pod completion (phase=Succeeded).
+    // Use this when the pod's task is defined inside the pod itself (e.g., a
+    // `command:` / `args:` script that does work and exits 0).
+    // Long-running services (Deployments whose process never exits) should leave
+    // this as default (false).
+    service("teamcitySeedUploader") {
+        templateFile.set(file("templates/teamcity-uploader-template.yaml"))
+        waitForCompletion.set(true)
+    }
 }
 ```
+
+#### `waitForCompletion`
+Per-service flag (default: `false`). When set to `true`, the generated `ocWait` task polls the pod(s) for that service until they reach `phase=Succeeded`; if any pod ends in `phase=Failed`, the build fails. `ocLogs` and `ocDelete` only run after `ocWait` finishes, so the pod's work is guaranteed to complete (and its logs are captured) before cleanup.
+
+Use this when the pod's workload is baked into the pod itself — the container's `command`/`args` does its work and then `exit 0` (e.g., a seed/uploader/migration pod with `restartPolicy: Never`). Long-running pods whose process never exits will never reach `phase=Succeeded` and would time out.
 
 #### Grouping Services
 Use nested groups when a set of services shares the same configuration but differs from the global setup:
