@@ -138,7 +138,7 @@ abstract class OcTemplateService @Inject constructor(
             updateCreatedResources()
             startLogStreaming()
 
-            val checkResult = checkPodAvailability(consecutiveNoPodChecks, maxConsecutiveNoPodChecks, seenAnyPod)
+            val checkResult = checkPodAvailability(consecutiveNoPodChecks, maxConsecutiveNoPodChecks, seenAnyPod, "readiness check")
             if (checkResult.shouldExit) return
             consecutiveNoPodChecks = checkResult.consecutiveNoPodChecks
             seenAnyPod = checkResult.seenAnyPod  // Update the flag
@@ -165,7 +165,8 @@ abstract class OcTemplateService @Inject constructor(
     private fun checkPodAvailability(
         currentConsecutiveChecks: Int,
         maxConsecutiveChecks: Int,
-        seenAnyPod: Boolean  // Pass current state
+        seenAnyPod: Boolean,  // Pass current state
+        contextLabel: String  // Caller-supplied label for the early-exit log line
     ): PodAvailabilityCheckResult {
         if (podResources.isEmpty()) {
             val newCount = currentConsecutiveChecks + 1
@@ -174,7 +175,7 @@ abstract class OcTemplateService @Inject constructor(
             // Only exit early if we've NEVER seen pods AND hit the threshold
             // (If we've seen pods before, keep waiting - they might be recreating during rolling update)
             if (newCount >= maxConsecutiveChecks && !seenAnyPod) {
-                logger.info("No pods found after $maxConsecutiveChecks checks - skipping readiness check")
+                logger.info("No pods found after $maxConsecutiveChecks checks - skipping $contextLabel")
                 return PodAvailabilityCheckResult(newCount, shouldExit = true, seenAnyPod = false)
             }
             return PodAvailabilityCheckResult(newCount, shouldExit = false, seenAnyPod)
@@ -271,6 +272,10 @@ abstract class OcTemplateService @Inject constructor(
         var consecutiveNoPodChecks = 0
         val maxConsecutiveNoPodChecks = 3
         var seenAnyPod = false
+        // Persist last-known phase per pod across iterations so an out-of-band GC
+        // (TTL controller, concurrent cleanup) after Succeeded does not masquerade
+        // as a timeout.
+        val lastSeenPhase = mutableMapOf<String, String>()
 
         logger.info("Waiting for pod(s) with prefix '$deploymentPrefix-$serviceName' to terminate (phase=Succeeded)...")
 
@@ -279,19 +284,22 @@ abstract class OcTemplateService @Inject constructor(
             updateCreatedResources()
             startLogStreaming()
 
-            val checkResult = checkPodAvailability(consecutiveNoPodChecks, maxConsecutiveNoPodChecks, seenAnyPod)
+            val checkResult = checkPodAvailability(consecutiveNoPodChecks, maxConsecutiveNoPodChecks, seenAnyPod, "termination wait")
             if (checkResult.shouldExit) return
             consecutiveNoPodChecks = checkResult.consecutiveNoPodChecks
             seenAnyPod = checkResult.seenAnyPod
 
-            if (podResources.isEmpty()) continue
+            podResources.forEach { name ->
+                getPodStatus(name)?.phase?.let { lastSeenPhase[name] = it }
+            }
 
-            val phases = podResources.associateWith { getPodStatus(it)?.phase }
-            val failed = phases.filterValues { it == "Failed" }.keys
+            if (lastSeenPhase.isEmpty()) continue
+
+            val failed = lastSeenPhase.filterValues { it == "Failed" }.keys
             if (failed.isNotEmpty()) {
                 throw Exception("Pods finished with phase=Failed: $failed")
             }
-            val terminated = phases.values.all { it == "Succeeded" }
+            val terminated = lastSeenPhase.values.all { it == "Succeeded" }
             if (terminated) {
                 logger.info(">> All pods terminated with phase=Succeeded")
                 return

@@ -121,7 +121,7 @@ class OcTaskConfiguration {
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
             task.serviceRegistry.set(getServiceRegistry())
             wireDiagnostics(task)
-            task.dependsOn(ocWaitTask)
+            task.mustRunAfter(ocWaitTask)
         }
         ocDeleteTask.configure { task ->
             task.serviceNames.set(serviceDependencyGraph.getOrdered())
@@ -130,7 +130,6 @@ class OcTaskConfiguration {
             // mustRunAfter ensures logs run before delete when both are scheduled (e.g., as finalizers)
             // but doesn't force dependency when ocDelete is run independently
             task.mustRunAfter(ocLogsTask)
-            task.mustRunAfter(ocWaitTask)
         }
     }
 
@@ -148,9 +147,9 @@ class OcTaskConfiguration {
 
     void isRequiredBy(Task task) {
         task.dependsOn { ocCreateTask }
+        ocWaitTask.configure { it.finalizedBy(ocLogsTask) }
+        ocLogsTask.configure { it.finalizedBy(ocDeleteTask) }
         task.finalizedBy { ocWaitTask }
-        task.finalizedBy { ocLogsTask }
-        task.finalizedBy { ocDeleteTask }
     }
 
     private OcTemplateServiceRegistry getServiceRegistry() {

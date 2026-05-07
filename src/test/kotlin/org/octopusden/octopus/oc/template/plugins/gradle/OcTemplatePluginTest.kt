@@ -37,6 +37,14 @@ class OcTemplatePluginTest {
         assertThat(projectPath.resolve("build/$WORK_DIR/postgres.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}").toFile()).isNotEmpty()
+        // postgres is long-running and does not opt in to waitForCompletion (default false).
+        // ocWait must run as a no-op for it: no termination-wait error should be raised.
+        assertThat(instance.stdErr).noneSatisfy {
+            assertThat(it).contains("Pods termination wait attempts exceeded")
+        }
+        assertThat(instance.stdErr).noneSatisfy {
+            assertThat(it).contains("Pods finished with phase=Failed")
+        }
     }
 
     @Test
