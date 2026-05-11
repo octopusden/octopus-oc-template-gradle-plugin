@@ -282,7 +282,9 @@ abstract class OcTemplateService @Inject constructor(
             startLogStreaming()
 
             val checkResult = checkPodAvailability(consecutiveNoPodChecks, seenAnyPod, TERMINATION_CONTEXT_LABEL)
-            if (checkResult.shouldExit) return
+            if (checkResult.shouldExit) {
+                throw Exception("No pods observed for '$deploymentPrefix-$serviceName'; cannot verify completion")
+            }
             consecutiveNoPodChecks = checkResult.consecutiveNoPodChecks
             seenAnyPod = checkResult.seenAnyPod
 
