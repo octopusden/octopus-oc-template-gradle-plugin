@@ -37,6 +37,14 @@ class OcTemplatePluginTest {
         assertThat(projectPath.resolve("build/$WORK_DIR/postgres.yaml")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres")}").toFile()).isNotEmpty()
+        // postgres is long-running and does not opt in to waitForCompletion (default false).
+        // ocWait must run as a no-op for it: no termination-wait error should be raised.
+        assertThat(instance.stdErr).noneSatisfy {
+            assertThat(it).contains("Pods termination wait attempts exceeded")
+        }
+        assertThat(instance.stdErr).noneSatisfy {
+            assertThat(it).contains("Pods finished with phase=Failed")
+        }
     }
 
     @Test
@@ -248,6 +256,26 @@ class OcTemplatePluginTest {
         assertThat(logFile).isNotEmpty()
         val markerCount = logFile.readText().split("STREAMING_CAPTURE_MARKER").size - 1
         assertThat(markerCount).isGreaterThan(3)
+    }
+
+    /**
+     * Verifies that for an opt-in service (waitForCompletion=true), the pipeline waits
+     * for the pod to reach phase=Succeeded before logs/delete fire. The captured log
+     * should contain the terminal marker the pod prints just before exiting.
+     */
+    @Test
+    fun testWaitForCompletionGate() {
+        val (instance, projectPath) = gradleProcessInstance {
+            testProjectName = "projects/wait-for-completion-pod"
+            tasks = TASKS
+            additionalArguments = DEFAULT_PARAMETERS
+            additionalEnvVariables = DEFAULT_ENV_VARIABLES
+        }
+        assertEquals(0, instance.exitCode)
+        val logFile = projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("completion-pod")}").toFile()
+        assertThat(logFile).exists()
+        assertThat(logFile).isNotEmpty()
+        assertThat(logFile.readText()).contains("COMPLETION_MARKER")
     }
 
     /**

@@ -1,0 +1,27 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: completion-pod
+objects:
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: ${DEPLOYMENT_PREFIX}-completion-pod
+      labels:
+        app.kubernetes.io/name: ${DEPLOYMENT_PREFIX}-completion-pod
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: ${DEPLOYMENT_PREFIX}-completion-pod
+          image: ${DOCKER_REGISTRY}/postgres:latest
+          command:
+            - /bin/sh
+            - -c
+            - "echo STARTING; for i in 1 2 3 4 5; do echo iter_$i; sleep 1; done; echo COMPLETION_MARKER; exit 0"
+parameters:
+  - description: Docker registry
+    name: DOCKER_REGISTRY
+    required: true
+  - description: DEPLOYMENT_PREFIX
+    name: DEPLOYMENT_PREFIX
+    required: true

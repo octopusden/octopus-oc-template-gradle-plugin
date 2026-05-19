@@ -128,7 +128,6 @@ abstract class OcTemplateService @Inject constructor(
         var ready = false
         var counter = 0
         var consecutiveNoPodChecks = 0
-        val maxConsecutiveNoPodChecks = 3
         var seenAnyPod = false  // Track if we've ever seen pods
 
         logger.info("Waiting for pod(s) with prefix '$deploymentPrefix-$serviceName' to be ready...")
@@ -138,7 +137,7 @@ abstract class OcTemplateService @Inject constructor(
             updateCreatedResources()
             startLogStreaming()
 
-            val checkResult = checkPodAvailability(consecutiveNoPodChecks, maxConsecutiveNoPodChecks, seenAnyPod)
+            val checkResult = checkPodAvailability(consecutiveNoPodChecks, seenAnyPod, READINESS_CONTEXT_LABEL)
             if (checkResult.shouldExit) return
             consecutiveNoPodChecks = checkResult.consecutiveNoPodChecks
             seenAnyPod = checkResult.seenAnyPod  // Update the flag
@@ -164,17 +163,17 @@ abstract class OcTemplateService @Inject constructor(
 
     private fun checkPodAvailability(
         currentConsecutiveChecks: Int,
-        maxConsecutiveChecks: Int,
-        seenAnyPod: Boolean  // Pass current state
+        seenAnyPod: Boolean,  // Pass current state
+        contextLabel: String  // Caller-supplied label for the early-exit log line
     ): PodAvailabilityCheckResult {
         if (podResources.isEmpty()) {
             val newCount = currentConsecutiveChecks + 1
-            logger.info(">> No pods found yet, retrying... (${newCount}/${maxConsecutiveChecks})")
+            logger.info(">> No pods found yet, retrying... (${newCount}/${MAX_CONSECUTIVE_NO_POD_CHECKS})")
 
             // Only exit early if we've NEVER seen pods AND hit the threshold
             // (If we've seen pods before, keep waiting - they might be recreating during rolling update)
-            if (newCount >= maxConsecutiveChecks && !seenAnyPod) {
-                logger.info("No pods found after $maxConsecutiveChecks checks - skipping readiness check")
+            if (newCount >= MAX_CONSECUTIVE_NO_POD_CHECKS && !seenAnyPod) {
+                logger.info("No pods found after $MAX_CONSECUTIVE_NO_POD_CHECKS checks - skipping $contextLabel")
                 return PodAvailabilityCheckResult(newCount, shouldExit = true, seenAnyPod = false)
             }
             return PodAvailabilityCheckResult(newCount, shouldExit = false, seenAnyPod)
@@ -191,17 +190,20 @@ abstract class OcTemplateService @Inject constructor(
     private fun isPodReady(podName: String): Boolean {
         val status = getPodStatus(podName) ?: return false
 
+        val phaseIsTerminalSuccess = status.phase == "Succeeded"
         val phaseIsRunning = status.phase == "Running"
         val allContainersReady = status.readyValues.isNotEmpty() && status.readyValues.all { it == "true" }
         // Treat missing startedValues as successful for backward compatibility (older K8s versions may not have .started field)
         val allContainersStarted = status.startedValues.isEmpty() || status.startedValues.all { it == "true" }
 
-        if (!phaseIsRunning || !allContainersReady || !allContainersStarted) {
+        val ready = phaseIsTerminalSuccess ||
+            (phaseIsRunning && allContainersReady && allContainersStarted)
+
+        if (!ready) {
             val startedStatus = if (status.startedValues.isEmpty()) "n/a" else status.startedValues.toString()
             logger.info(">> Pod '$podName' not ready: phase=${status.phase}, ready=${status.readyValues}, started=$startedStatus")
         }
-
-        return phaseIsRunning && allContainersReady && allContainersStarted
+        return ready
     }
 
     private data class PodStatus(
@@ -261,6 +263,49 @@ abstract class OcTemplateService @Inject constructor(
                 logger.info("- $it: ${parameters.webConsoleUrl.get()}/k8s/ns/$namespace/pods/$it")
             }
         }
+    }
+
+    fun waitTermination() {
+        var counter = 0
+        var consecutiveNoPodChecks = 0
+        var seenAnyPod = false
+        // Persist last-known phase per pod across iterations so an out-of-band GC
+        // (TTL controller, concurrent cleanup) after Succeeded does not masquerade
+        // as a timeout.
+        val lastSeenPhase = mutableMapOf<String, String>()
+
+        logger.info("Waiting for pod(s) with prefix '$deploymentPrefix-$serviceName' to terminate (phase=Succeeded)...")
+
+        while (counter++ < attempts) {
+            Thread.sleep(period)
+            updateCreatedResources()
+            startLogStreaming()
+
+            val checkResult = checkPodAvailability(consecutiveNoPodChecks, seenAnyPod, TERMINATION_CONTEXT_LABEL)
+            if (checkResult.shouldExit) {
+                throw Exception("No pods observed for '$deploymentPrefix-$serviceName'; cannot verify completion")
+            }
+            consecutiveNoPodChecks = checkResult.consecutiveNoPodChecks
+            seenAnyPod = checkResult.seenAnyPod
+
+            podResources.forEach { name ->
+                getPodStatus(name)?.phase?.let { lastSeenPhase[name] = it }
+            }
+
+            if (lastSeenPhase.isEmpty()) continue
+
+            val failed = lastSeenPhase.filterValues { it == "Failed" }.keys
+            if (failed.isNotEmpty()) {
+                throw Exception("Pods finished with phase=Failed: $failed")
+            }
+            val terminated = lastSeenPhase.values.all { it == "Succeeded" }
+            if (terminated) {
+                logger.info(">> All pods terminated with phase=Succeeded")
+                return
+            }
+            logger.info(">> Pods not yet terminated, waiting...")
+        }
+        throw Exception("Pods termination wait attempts exceeded")
     }
 
     fun logs() {
@@ -411,6 +456,12 @@ abstract class OcTemplateService @Inject constructor(
         } else {
             logger.info("Skipping cleanup of created resources (autoCleanup=false)")
         }
+    }
+
+    companion object {
+        private const val READINESS_CONTEXT_LABEL = "readiness check"
+        private const val TERMINATION_CONTEXT_LABEL = "termination wait"
+        private const val MAX_CONSECUTIVE_NO_POD_CHECKS = 3
     }
 
 }
