@@ -1,10 +1,12 @@
 package org.octopusden.octopus.oc.template.plugins.gradle.service
 
 class OcTemplateServiceDependencyGraph {
-
     private val adjacency = mutableMapOf<String, MutableList<String>>()
 
-    fun add(name: String, dependsOn: List<String>) {
+    fun add(
+        name: String,
+        dependsOn: List<String>,
+    ) {
         adjacency.getOrPut(name) { mutableListOf() }.addAll(dependsOn)
         dependsOn.forEach { adjacency.putIfAbsent(it, mutableListOf()) }
     }
@@ -24,5 +26,4 @@ class OcTemplateServiceDependencyGraph {
         adjacency.keys.forEach { visit(it) }
         return result
     }
-
 }

@@ -7,16 +7,14 @@ import java.io.File
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
-
 class DiagnosticsCollector(
     private val namespace: String,
     val diagnosticsDir: File,
     private val projectName: String,
     private val gitSha: String,
     private val schemaVersion: Int = 1,
-    private val ocRunner: OcRunner = DefaultOcRunner()
+    private val ocRunner: OcRunner = DefaultOcRunner(),
 ) {
-
     private val logger: Logger = LoggerFactory.getLogger(DiagnosticsCollector::class.java)
 
     private val beforeDir: File = diagnosticsDir.resolve("snapshot-before")
@@ -31,6 +29,7 @@ class DiagnosticsCollector(
     private val degradationLog: File = diagnosticsDir.resolve("degradation.log")
 
     private val startTs: Instant = Instant.now()
+
     @Volatile private var endTs: Instant? = null
 
     private val degraded = mutableSetOf<String>()
@@ -40,7 +39,6 @@ class DiagnosticsCollector(
     init {
         diagnosticsDir.mkdirs()
     }
-
 
     fun writeBeforeSnapshot() {
         writeSnapshotInto(beforeDir)
@@ -84,7 +82,11 @@ class DiagnosticsCollector(
         writeOcJsonTo(dir.resolve("events.json"), listOf("get", "events", "-n", namespace, "-o", "json"), "events")
     }
 
-    private fun writeOcJsonTo(target: File, args: List<String>, source: String) {
+    private fun writeOcJsonTo(
+        target: File,
+        args: List<String>,
+        source: String,
+    ) {
         val result = ocRunner.run(args, DEFAULT_TIMEOUT_MS)
         if (result.exitCode != 0) {
             markDegraded(source, "exit=${result.exitCode}: ${result.stderr.take(200)}")
@@ -110,18 +112,22 @@ class DiagnosticsCollector(
                 val limits = resources?.get("limits") as? Map<*, *>
                 val memLimit = limits?.get("memory")?.toString().orEmpty()
                 val cpuLimit = limits?.get("cpu")?.toString().orEmpty()
-                sb.append("{")
-                    .append(jsonField("pod", pod)).append(",")
-                    .append(jsonField("container", containerName)).append(",")
-                    .append(jsonField("node", node)).append(",")
-                    .append(jsonField("memLimit", memLimit)).append(",")
+                sb
+                    .append("{")
+                    .append(jsonField("pod", pod))
+                    .append(",")
+                    .append(jsonField("container", containerName))
+                    .append(",")
+                    .append(jsonField("node", node))
+                    .append(",")
+                    .append(jsonField("memLimit", memLimit))
+                    .append(",")
                     .append(jsonField("cpuLimit", cpuLimit))
                     .append("}\n")
             }
         }
         podLimitsFile.writeText(sb.toString())
     }
-
 
     private fun sampleMetrics(ts: String) {
         val result = ocRunner.run(listOf("adm", "top", "pods", "-n", namespace, "--no-headers"), DEFAULT_TIMEOUT_MS)
@@ -136,10 +142,14 @@ class DiagnosticsCollector(
             val pod = parts[0]
             val cpuM = parseCpuMillicores(parts[1])
             val memBytes = parseMemoryBytes(parts[2])
-            sb.append("{")
-                .append(jsonField("ts", ts)).append(",")
-                .append(jsonField("pod", pod)).append(",")
-                .append(jsonField("cpu_m", cpuM)).append(",")
+            sb
+                .append("{")
+                .append(jsonField("ts", ts))
+                .append(",")
+                .append(jsonField("pod", pod))
+                .append(",")
+                .append(jsonField("cpu_m", cpuM))
+                .append(",")
                 .append(jsonField("mem_bytes", memBytes))
                 .append("}\n")
         }
@@ -171,12 +181,18 @@ class DiagnosticsCollector(
                 if (exit.isNotEmpty()) lastExit = exit
             }
 
-            sb.append("{")
-                .append(jsonField("ts", ts)).append(",")
-                .append(jsonField("pod", podName)).append(",")
-                .append(jsonField("phase", phase)).append(",")
-                .append(jsonField("restartCount", totalRestarts)).append(",")
-                .append(jsonField("lastTerminatedReason", lastReason)).append(",")
+            sb
+                .append("{")
+                .append(jsonField("ts", ts))
+                .append(",")
+                .append(jsonField("pod", podName))
+                .append(",")
+                .append(jsonField("phase", phase))
+                .append(",")
+                .append(jsonField("restartCount", totalRestarts))
+                .append(",")
+                .append(jsonField("lastTerminatedReason", lastReason))
+                .append(",")
                 .append(jsonField("lastTerminatedExitCode", lastExit))
                 .append("}\n")
         }
@@ -196,11 +212,16 @@ class DiagnosticsCollector(
 
             val keys = hard.keys.map { it.toString() } + used.keys.map { it.toString() }
             keys.toSet().forEach { k ->
-                sb.append("{")
-                    .append(jsonField("ts", ts)).append(",")
-                    .append(jsonField("name", quotaName)).append(",")
-                    .append(jsonField("resource", k)).append(",")
-                    .append(jsonField("hard", hard[k]?.toString().orEmpty())).append(",")
+                sb
+                    .append("{")
+                    .append(jsonField("ts", ts))
+                    .append(",")
+                    .append(jsonField("name", quotaName))
+                    .append(",")
+                    .append(jsonField("resource", k))
+                    .append(",")
+                    .append(jsonField("hard", hard[k]?.toString().orEmpty()))
+                    .append(",")
                     .append(jsonField("used", used[k]?.toString().orEmpty()))
                     .append("}\n")
             }
@@ -208,7 +229,10 @@ class DiagnosticsCollector(
         appendText(quotaFile, sb.toString())
     }
 
-    private fun fetchItems(resource: String, degradedName: String): List<*>? {
+    private fun fetchItems(
+        resource: String,
+        degradedName: String,
+    ): List<*>? {
         val result = ocRunner.run(listOf("get", resource, "-n", namespace, "-o", "json"), DEFAULT_TIMEOUT_MS)
         if (result.exitCode != 0) {
             markDegraded(degradedName, "exit=${result.exitCode}")
@@ -219,14 +243,13 @@ class DiagnosticsCollector(
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun parseJson(text: String): Map<String, Any?>? {
-        return try {
+    private fun parseJson(text: String): Map<String, Any?>? =
+        try {
             JsonSlurper().parseText(text) as? Map<String, Any?>
         } catch (e: Exception) {
             logger.debug("Failed to parse JSON: ${e.message}")
             null
         }
-    }
 
     private fun sampleEvents(ts: String) {
         val jsonpath = "{range .items[*]}{.metadata.uid}{\"\\t\"}{.lastTimestamp}{\"\\t\"}{.type}{\"\\t\"}{.reason}{\"\\t\"}{.involvedObject.kind}{\"/\"}{.involvedObject.name}{\"\\t\"}{.message}{\"\\n\"}{end}"
@@ -242,19 +265,28 @@ class DiagnosticsCollector(
             if (parts.size < 6) return@forEach
             val uid = parts[0]
             if (!seenEvents.add(uid)) return@forEach
-            sb.append("{")
-                .append(jsonField("ts", ts)).append(",")
-                .append(jsonField("eventTs", parts[1])).append(",")
-                .append(jsonField("type", parts[2])).append(",")
-                .append(jsonField("reason", parts[3])).append(",")
-                .append(jsonField("object", parts[4])).append(",")
+            sb
+                .append("{")
+                .append(jsonField("ts", ts))
+                .append(",")
+                .append(jsonField("eventTs", parts[1]))
+                .append(",")
+                .append(jsonField("type", parts[2]))
+                .append(",")
+                .append(jsonField("reason", parts[3]))
+                .append(",")
+                .append(jsonField("object", parts[4]))
+                .append(",")
                 .append(jsonField("message", parts[5]))
                 .append("}\n")
         }
         appendText(eventsFile, sb.toString())
     }
 
-    private fun appendText(file: File, text: String) {
+    private fun appendText(
+        file: File,
+        text: String,
+    ) {
         if (text.isEmpty()) return
         try {
             file.appendText(text)
@@ -263,13 +295,18 @@ class DiagnosticsCollector(
         }
     }
 
-    private fun markDegraded(source: String, detail: String) {
+    private fun markDegraded(
+        source: String,
+        detail: String,
+    ) {
         if (degraded.add(source)) {
             val msg = "Diagnostics source '$source' unavailable: $detail"
             logger.warn(msg)
             try {
                 degradationLog.appendText("${Instant.now()}\t$source\t$detail\n")
-            } catch (_: Exception) { /* ignore */ }
+            } catch (_: Exception) {
+                // ignore
+            }
         }
     }
 
@@ -289,9 +326,16 @@ class DiagnosticsCollector(
         internal fun parseMemoryBytes(s: String): Long {
             val t = s.trim()
             if (t.isEmpty()) return 0
-            val suffixes = listOf("Ki" to 1024L, "Mi" to 1024L * 1024, "Gi" to 1024L * 1024 * 1024,
-                "Ti" to 1024L * 1024 * 1024 * 1024, "K" to 1000L, "M" to 1_000_000L,
-                "G" to 1_000_000_000L, "T" to 1_000_000_000_000L)
+            val suffixes = listOf(
+                "Ki" to 1024L,
+                "Mi" to 1024L * 1024,
+                "Gi" to 1024L * 1024 * 1024,
+                "Ti" to 1024L * 1024 * 1024 * 1024,
+                "K" to 1000L,
+                "M" to 1_000_000L,
+                "G" to 1_000_000_000L,
+                "T" to 1_000_000_000_000L,
+            )
             for ((suffix, mult) in suffixes) {
                 if (t.endsWith(suffix)) {
                     return (t.dropLast(suffix.length).toDoubleOrNull()?.times(mult))?.toLong() ?: 0
@@ -300,11 +344,15 @@ class DiagnosticsCollector(
             return t.toLongOrNull() ?: 0
         }
 
-        internal fun jsonField(key: String, value: String): String =
-            "\"${escape(key)}\":\"${escape(value)}\""
+        internal fun jsonField(
+            key: String,
+            value: String,
+        ): String = "\"${escape(key)}\":\"${escape(value)}\""
 
-        internal fun jsonField(key: String, value: Number): String =
-            "\"${escape(key)}\":$value"
+        internal fun jsonField(
+            key: String,
+            value: Number,
+        ): String = "\"${escape(key)}\":$value"
 
         private fun escape(s: String): String {
             val sb = StringBuilder(s.length + 2)
@@ -322,14 +370,24 @@ class DiagnosticsCollector(
         }
     }
 
-    data class OcResult(val exitCode: Int, val stdout: String, val stderr: String)
+    data class OcResult(
+        val exitCode: Int,
+        val stdout: String,
+        val stderr: String,
+    )
 
     interface OcRunner {
-        fun run(args: List<String>, timeoutMs: Long): OcResult
+        fun run(
+            args: List<String>,
+            timeoutMs: Long,
+        ): OcResult
     }
 
     class DefaultOcRunner : OcRunner {
-        override fun run(args: List<String>, timeoutMs: Long): OcResult {
+        override fun run(
+            args: List<String>,
+            timeoutMs: Long,
+        ): OcResult {
             return try {
                 val pb = ProcessBuilder(listOf("oc") + args).redirectErrorStream(false)
                 val p = pb.start()

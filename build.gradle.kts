@@ -11,10 +11,26 @@ plugins {
     signing
     id("io.github.gradle-nexus.publish-plugin")
     id("com.jfrog.artifactory")
+    id("io.gitlab.arturbosch.detekt")
+    id("org.jlleitschuh.gradle.ktlint")
+    id("org.octopusden.octopus-quality")
 }
 
 group = "org.octopusden.octopus"
 description = "Octopus module for OC template gradle plugin"
+
+octopusQuality {
+    // Repo has no jacoco/kover setup — keep coverage verification disabled.
+    coverage {
+        enabled.set(false)
+    }
+    // Fail the build on new violations; existing debt is absorbed by committed baselines
+    // (detekt-baseline.xml / ktlint-baseline.xml). Groovy (codenarc) has no baseline
+    // mechanism, so it stays report-only for now.
+    kotlin { failOnViolation.set(true) }
+    java { failOnViolation.set(true) }
+    groovy { failOnViolation.set(false) }
+}
 
 repositories {
     mavenCentral()
@@ -58,12 +74,17 @@ gradlePlugin {
     }
 }
 
-fun getTestParameter(envName: String, propertyName: String, defaultValue: String? = null): String {
-    return System.getenv(envName)
+fun getTestParameter(
+    envName: String,
+    propertyName: String,
+    defaultValue: String? = null,
+): String =
+    System.getenv(envName)
         ?: (project.findProperty(propertyName) as String?)
         ?: defaultValue
-        ?: throw IllegalStateException("Required test parameter '$envName' not found in environment variables or gradle properties (-P$propertyName)")
-}
+        ?: throw IllegalStateException(
+            "Required test parameter '$envName' not found in environment variables or gradle properties (-P$propertyName)",
+        )
 
 val testParameters by lazy {
     mapOf(
@@ -71,7 +92,7 @@ val testParameters by lazy {
         "okdProject" to getTestParameter("OKD_PROJECT", "okd.project"),
         "okdClusterDomain" to getTestParameter("OKD_CLUSTER_DOMAIN", "okd.cluster-domain"),
         "okdWebConsoleUrl" to getTestParameter("OKD_WEB_CONSOLE_URL", "okd.web-console-url"),
-        "dockerRegistry" to getTestParameter("DOCKER_REGISTRY", "docker.registry")
+        "dockerRegistry" to getTestParameter("DOCKER_REGISTRY", "docker.registry"),
     )
 }
 
@@ -144,8 +165,10 @@ publishing {
 }
 
 signing {
-    isRequired = System.getenv().containsKey("ORG_GRADLE_PROJECT_signingKey") && System.getenv()
-        .containsKey("ORG_GRADLE_PROJECT_signingPassword")
+    isRequired = System.getenv().containsKey("ORG_GRADLE_PROJECT_signingKey") &&
+        System
+            .getenv()
+            .containsKey("ORG_GRADLE_PROJECT_signingPassword")
     val signingKey: String? by project
     val signingPassword: String? by project
     useInMemoryPgpKeys(signingKey, signingPassword)

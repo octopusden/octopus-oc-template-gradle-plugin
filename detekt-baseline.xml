@@ -1,0 +1,33 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ClassOrdering:OcTemplatePluginTest.kt$OcTemplatePluginTest$Companion</ID>
+    <ID>ClassOrdering:PostMortemAnalyzer.kt$PostMortemAnalyzer$private val slurper = JsonSlurper()</ID>
+    <ID>CyclomaticComplexMethod:DiagnosticsCollector.kt$DiagnosticsCollector$private fun capturePodLimits()</ID>
+    <ID>CyclomaticComplexMethod:DiagnosticsCollector.kt$DiagnosticsCollector$private fun samplePods(ts: String)</ID>
+    <ID>CyclomaticComplexMethod:PostMortemAnalyzer.kt$PostMortemAnalyzer$fun analyze(diagnosticsDir: File): String</ID>
+    <ID>ImplicitDefaultLocale:DiagnosticsCollector.kt$DiagnosticsCollector.Companion$String.format("\\u%04x", c.code)</ID>
+    <ID>LoopWithTooManyJumpStatements:DiagnosticsCollector.kt$DiagnosticsCollector$for</ID>
+    <ID>MatchingDeclarationName:OcTemplatePluginRunner.kt$TestGradleDSL</ID>
+    <ID>MaxLineLength:DiagnosticsCollector.kt$DiagnosticsCollector$val jsonpath = "{range .items[*]}{.metadata.uid}{\"\\t\"}{.lastTimestamp}{\"\\t\"}{.type}{\"\\t\"}{.reason}{\"\\t\"}{.involvedObject.kind}{\"/\"}{.involvedObject.name}{\"\\t\"}{.message}{\"\\n\"}{end}"</ID>
+    <ID>MaxLineLength:PostMortemAnalyzerTest.kt$PostMortemAnalyzerTest$"""{"schemaVersion":1,"project":"$project","namespace":"$ns","gitSha":"","ftStartTs":"2026-04-09T14:00:00Z","ftEndTs":"2026-04-09T14:10:00Z"}"""</ID>
+    <ID>MaxLineLength:PostMortemAnalyzerTest.kt$PostMortemAnalyzerTest$"""{"ts":"2026-04-09T14:01:00Z","eventTs":"2026-04-09T14:01:00Z","type":"Warning","reason":"FailedScheduling","object":"Pod/pending-svc","message":"0/6 nodes insufficient memory"}"""</ID>
+    <ID>MaxLineLength:PostMortemAnalyzerTest.kt$PostMortemAnalyzerTest$"""{"ts":"2026-04-09T14:03:12Z","pod":"bad-svc","phase":"Running","restartCount":0,"lastTerminatedReason":"","lastTerminatedExitCode":""}"""</ID>
+    <ID>MaxLineLength:PostMortemAnalyzerTest.kt$PostMortemAnalyzerTest$"""{"ts":"2026-04-09T14:03:12Z","pod":"svc-1","phase":"Running","restartCount":0,"lastTerminatedReason":"","lastTerminatedExitCode":""}"""</ID>
+    <ID>MaxLineLength:PostMortemAnalyzerTest.kt$PostMortemAnalyzerTest$"""{"ts":"2026-04-09T14:07:22Z","pod":"bad-svc","phase":"Running","restartCount":1,"lastTerminatedReason":"OOMKilled","lastTerminatedExitCode":"137"}"""</ID>
+    <ID>ThrowsCount:OcTemplateService.kt$OcTemplateService$fun waitTermination()</ID>
+    <ID>TooGenericExceptionCaught:DiagnosticsCollector.kt$DiagnosticsCollector$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:DiagnosticsCollector.kt$DiagnosticsCollector.DefaultOcRunner$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:OcDiagnosticsService.kt$OcDiagnosticsService$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:OcTemplateService.kt$OcTemplateService$e: Exception</ID>
+    <ID>TooGenericExceptionThrown:OcTemplateService.kt$OcTemplateService$throw Exception("No pods observed for '$deploymentPrefix-$serviceName'; cannot verify completion")</ID>
+    <ID>TooGenericExceptionThrown:OcTemplateService.kt$OcTemplateService$throw Exception("Pods finished with phase=Failed: $failed")</ID>
+    <ID>TooGenericExceptionThrown:OcTemplateService.kt$OcTemplateService$throw Exception("Pods readiness check attempts exceeded")</ID>
+    <ID>TooGenericExceptionThrown:OcTemplateService.kt$OcTemplateService$throw Exception("Pods termination wait attempts exceeded")</ID>
+    <ID>TooGenericExceptionThrown:OcTemplateService.kt$OcTemplateService$throw Exception("oc process failed: $errorMessage")</ID>
+    <ID>TooManyFunctions:DiagnosticsCollector.kt$DiagnosticsCollector</ID>
+    <ID>TooManyFunctions:OcTemplateService.kt$OcTemplateService : BuildServiceAutoCloseable</ID>
+    <ID>UseRequire:OcTemplatePluginRunner.kt$throw IllegalArgumentException("The specified project '${testGradleDSL.testProjectName}' hasn't been found at $projectPath")</ID>
+  </CurrentIssues>
+</SmellBaseline>
