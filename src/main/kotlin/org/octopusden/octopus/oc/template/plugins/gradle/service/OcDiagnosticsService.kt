@@ -23,8 +23,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Idempotent: multiple start/stop calls are no-ops. Never throws out of
  * start/stop — diagnostics must not fail the build.
  */
-abstract class OcDiagnosticsService : BuildService<OcDiagnosticsService.Parameters>, AutoCloseable {
-
+abstract class OcDiagnosticsService :
+    BuildService<OcDiagnosticsService.Parameters>,
+    AutoCloseable {
     interface Parameters : BuildServiceParameters {
         val namespace: Property<String>
         val workDir: DirectoryProperty
@@ -39,6 +40,7 @@ abstract class OcDiagnosticsService : BuildService<OcDiagnosticsService.Paramete
     private val stopped = AtomicBoolean(false)
 
     @Volatile private var collector: DiagnosticsCollector? = null
+
     @Volatile private var pollerThread: Thread? = null
 
     fun startCollection() {
@@ -52,7 +54,7 @@ abstract class OcDiagnosticsService : BuildService<OcDiagnosticsService.Paramete
                 namespace = namespace,
                 diagnosticsDir = runDir,
                 projectName = parameters.projectName.getOrElse("unknown"),
-                gitSha = parameters.gitSha.getOrElse("")
+                gitSha = parameters.gitSha.getOrElse(""),
             )
             collector = c
             logger.info("Starting OKD diagnostics collection for namespace '$namespace' into ${runDir.absolutePath}")
@@ -97,7 +99,11 @@ abstract class OcDiagnosticsService : BuildService<OcDiagnosticsService.Paramete
         val c = collector
         try {
             t?.interrupt()
-            try { t?.join(5_000) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+            try {
+                t?.join(5_000)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
             if (c != null) {
                 safely("after-snapshot") { c.writeAfterSnapshot() }
                 safely("meta") { c.writeMeta() }
@@ -120,7 +126,10 @@ abstract class OcDiagnosticsService : BuildService<OcDiagnosticsService.Paramete
         }
     }
 
-    private inline fun safely(step: String, block: () -> Unit) {
+    private inline fun safely(
+        step: String,
+        block: () -> Unit,
+    ) {
         try {
             block()
         } catch (e: Exception) {

@@ -25,30 +25,39 @@ fun gradleProcessInstance(init: TestGradleDSL.() -> Unit): Pair<ProcessInstance,
         throw IllegalArgumentException("The specified project '${testGradleDSL.testProjectName}' hasn't been found at $projectPath")
     }
 
-    return Pair(ProcessBuilders
-        .newProcessBuilder<ProcessBuilder>(LocalProcessSpec.LOCAL_COMMAND)
-        .envVariables(mapOf(
-            "OKD_PROJECT" to "",            // remove inherited OKD_PROJECT from parent process
-            "OKD_CLUSTER_DOMAIN" to "",     // remove inherited OKD_CLUSTER_DOMAIN from parent process
-            "OKD_WEB_CONSOLE_URL" to "",    // remove inherited OKD_WEB_CONSOLE_URL from parent process
-            "JAVA_HOME" to System.getProperty("java.home")
-        ) + testGradleDSL.additionalEnvVariables)
-        .redirectStandardOutput(System.out)
-        .redirectStandardError(System.err)
-        .defaultExtensionMapping()
-        .workDirectory(projectPath)
-        .processInstance { processInstanceConfiguration -> processInstanceConfiguration.unlimited() }
-        .commandAndArguments("$projectPath/gradlew", "--no-daemon")
-        .build()
-        .execute(
-            *(listOf(
-                "-Poctopus-oc-template.version=${System.getProperty("ocTemplateGradlePluginVersion")}"
-            ) + testGradleDSL.tasks + testGradleDSL.additionalArguments).toTypedArray())
-        .toCompletableFuture()
-        .join(), projectPath)
+    return Pair(
+        ProcessBuilders
+            .newProcessBuilder<ProcessBuilder>(LocalProcessSpec.LOCAL_COMMAND)
+            .envVariables(
+                mapOf(
+                    "OKD_PROJECT" to "", // remove inherited OKD_PROJECT from parent process
+                    "OKD_CLUSTER_DOMAIN" to "", // remove inherited OKD_CLUSTER_DOMAIN from parent process
+                    "OKD_WEB_CONSOLE_URL" to "", // remove inherited OKD_WEB_CONSOLE_URL from parent process
+                    "JAVA_HOME" to System.getProperty("java.home"),
+                ) + testGradleDSL.additionalEnvVariables,
+            ).redirectStandardOutput(System.out)
+            .redirectStandardError(System.err)
+            .defaultExtensionMapping()
+            .workDirectory(projectPath)
+            .processInstance { processInstanceConfiguration -> processInstanceConfiguration.unlimited() }
+            .commandAndArguments("$projectPath/gradlew", "--no-daemon")
+            .build()
+            .execute(
+                *(
+                    listOf(
+                        "-Poctopus-oc-template.version=${System.getProperty("ocTemplateGradlePluginVersion")}",
+                    ) + testGradleDSL.tasks + testGradleDSL.additionalArguments
+                ).toTypedArray(),
+            ).toCompletableFuture()
+            .join(),
+        projectPath,
+    )
 }
 
-private fun getResourcePath(path: String, description: String): Path {
+private fun getResourcePath(
+    path: String,
+    description: String,
+): Path {
     val resource = TestGradleDSL::class.java.getResource(path)
         ?: error("$description '$path' not found in resources")
     return Paths.get(resource.toURI())

@@ -35,7 +35,9 @@ object PostMortemAnalyzer {
         val duration = runCatching {
             if (startTs.isNotEmpty() && endTs.isNotEmpty()) {
                 Duration.between(Instant.parse(startTs), Instant.parse(endTs)).seconds
-            } else -1L
+            } else {
+                -1L
+            }
         }.getOrDefault(-1L)
 
         lines += "FT run post-mortem"
@@ -71,8 +73,7 @@ object PostMortemAnalyzer {
                 val counts = samples.mapNotNull { (it["restartCount"] ?: "").toIntOrNull() }
                 val delta = (counts.maxOrNull() ?: 0) - (counts.minOrNull() ?: 0)
                 if (delta > 0) pod to delta else null
-            }
-            .toMap()
+            }.toMap()
 
         if (oomKilledPods.isNotEmpty()) {
             signals += "OOMKill"
@@ -141,8 +142,14 @@ object PostMortemAnalyzer {
                     val name = first["name"] ?: "?"
                     val hard = first["hard"] ?: "?"
                     val isCpu = resource.contains("cpu")
-                    fun parse(v: String): Long = if (isCpu) DiagnosticsCollector.parseCpuMillicores(v) else DiagnosticsCollector.parseMemoryBytes(v)
-                    fun pct(used: String, hard: String): String {
+
+                    fun parse(v: String): Long =
+                        if (isCpu) DiagnosticsCollector.parseCpuMillicores(v) else DiagnosticsCollector.parseMemoryBytes(v)
+
+                    fun pct(
+                        used: String,
+                        hard: String,
+                    ): String {
                         val u = parse(used)
                         val h = parse(hard)
                         return if (h > 0) "${"%.0f".format(u * 100.0 / h)}%" else "?"
@@ -176,7 +183,13 @@ object PostMortemAnalyzer {
         }
 
         // Classification
-        val verdict = if (signals.isEmpty()) "NO — no resource-pressure signals detected" else "YES — signals: ${signals.toSet().joinToString(", ")}"
+        val verdict = if (signals.isEmpty()) {
+            "NO — no resource-pressure signals detected"
+        } else {
+            "YES — signals: ${signals.toSet().joinToString(
+                ", ",
+            )}"
+        }
         lines += "Likely resource problem: $verdict"
 
         return lines.joinToString("\n") + "\n"
@@ -188,7 +201,6 @@ object PostMortemAnalyzer {
         out.writeText(summary)
         return out
     }
-
 
     private val slurper = JsonSlurper()
 
@@ -225,7 +237,10 @@ object PostMortemAnalyzer {
         val units = listOf("B", "KiB", "MiB", "GiB", "TiB")
         var b = bytes.toDouble()
         var u = 0
-        while (b >= 1024.0 && u < units.size - 1) { b /= 1024.0; u++ }
+        while (b >= 1024.0 && u < units.size - 1) {
+            b /= 1024.0
+            u++
+        }
         return "${"%.1f".format(b)}${units[u]}"
     }
 }

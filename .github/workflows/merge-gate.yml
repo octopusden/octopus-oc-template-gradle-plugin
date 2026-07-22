@@ -1,0 +1,40 @@
+# PUBLIC — every PR triggers this workflow and the gate/merge check must be green to merge.
+name: Merge Gate
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.4.1
+    with:
+      java-version: '11'
+      flow-type: hybrid
+    secrets: inherit
+
+  quality:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.4.1
+    with:
+      java-version: '11'
+      # Repo tests require an OKD/Docker cluster (OKD_PROJECT, DOCKER_REGISTRY, ...) that
+      # is unavailable on CI runners; exclude the infra-bound `test` task from the gate.
+      coverage-command: ./gradlew qualityCoverage -x test --no-daemon --stacktrace
+    secrets: inherit
+
+  security:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.4.1
+    with:
+      java-version: '11'
+    secrets: inherit
+
+  gate-merge:
+    name: gate/merge
+    needs: [ build, quality, security ]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: octopusden/octopus-base/.github/actions/merge-gate@v2.4.1
+        with:
+          needs: ${{ toJson(needs) }}

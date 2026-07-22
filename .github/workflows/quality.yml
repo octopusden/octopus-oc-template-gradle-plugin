@@ -1,0 +1,17 @@
+# INTERNAL — triggered on push to main and manually; never on pull_request.
+name: Quality
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  quality:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.4.1
+    with:
+      java-version: '11'
+      # Repo tests require an OKD/Docker cluster (OKD_PROJECT, DOCKER_REGISTRY, ...) that
+      # is unavailable on CI runners; exclude the infra-bound `test` task from the gate.
+      coverage-command: ./gradlew qualityCoverage -x test --no-daemon --stacktrace
+    secrets: inherit

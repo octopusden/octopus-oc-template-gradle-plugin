@@ -16,4 +16,4 @@ data class OcTemplateServiceParametersDTO(
     override val period: Property<Long>,
     override val attempts: Property<Int>,
     override val autoCleanup: Property<Boolean>,
-): OcTemplateService.Parameters
+) : OcTemplateService.Parameters

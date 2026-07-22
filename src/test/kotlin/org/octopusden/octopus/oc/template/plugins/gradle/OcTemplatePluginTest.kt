@@ -1,13 +1,12 @@
 package org.octopusden.octopus.oc.template.plugins.gradle
 
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Test
 import org.octopusden.octopus.oc.template.plugins.gradle.runner.gradleProcessInstance
 
 class OcTemplatePluginTest {
-
     companion object {
         const val WORK_DIR = "okd"
         const val DEPLOYMENT_PREFIX = "oc-template-ft"
@@ -20,7 +19,7 @@ class OcTemplatePluginTest {
             "-Pokd-project=$OKD_PROJECT",
             "-Pwork-directory=$WORK_DIR",
             "-Pproject-prefix=$DEPLOYMENT_PREFIX",
-            "-Pdocker-registry=$DOCKER_REGISTRY"
+            "-Pdocker-registry=$DOCKER_REGISTRY",
         )
         private val DEFAULT_ENV_VARIABLES = mapOf("OKD_CLUSTER_DOMAIN" to OKD_CLUSTER_DOMAIN)
     }
@@ -55,7 +54,7 @@ class OcTemplatePluginTest {
             additionalArguments = arrayOf(
                 "-Pokd-project=$OKD_PROJECT",
                 "-Pwork-directory=$WORK_DIR",
-                "-Pproject-prefix=$DEPLOYMENT_PREFIX"
+                "-Pproject-prefix=$DEPLOYMENT_PREFIX",
             )
             additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
@@ -79,9 +78,9 @@ class OcTemplatePluginTest {
         assertEquals(0, instance.exitCode)
         assertThat(projectPath.resolve("build/$WORK_DIR/simple-rest.yaml")).exists()
         assertThat(
-            projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles {
-                file -> file.name.startsWith(getLogFileName("simple-rest").removeSuffix(".log"))
-            }
+            projectPath.resolve("build/$WORK_DIR/logs").toFile().listFiles { file ->
+                file.name.startsWith(getLogFileName("simple-rest").removeSuffix(".log"))
+            },
         ).hasSize(1)
     }
 
@@ -93,7 +92,7 @@ class OcTemplatePluginTest {
             additionalArguments = arrayOf(
                 "-Pokd-project=$OKD_PROJECT",
                 "-Pwork-directory=$WORK_DIR",
-                "-Pproject-prefix=$DEPLOYMENT_PREFIX"
+                "-Pproject-prefix=$DEPLOYMENT_PREFIX",
             )
             additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
@@ -117,11 +116,11 @@ class OcTemplatePluginTest {
                 "-Pwork-directory=$WORK_DIR",
                 "-Pproject-prefix=$DEPLOYMENT_PREFIX",
                 "-Pokd-cluster-domain=$OKD_CLUSTER_DOMAIN",
-                "-Pdocker-registry=$DOCKER_REGISTRY"
+                "-Pdocker-registry=$DOCKER_REGISTRY",
             )
             additionalEnvVariables = mapOf(
                 "OKD_PROJECT" to OKD_PROJECT,
-                "OKD_WEB_CONSOLE_URL" to OKD_WEB_CONSOLE_URL
+                "OKD_WEB_CONSOLE_URL" to OKD_WEB_CONSOLE_URL,
             )
         }
         assertEquals(0, instance.exitCode)
@@ -143,7 +142,7 @@ class OcTemplatePluginTest {
             additionalArguments = arrayOf(
                 "-Pokd-project=invalid-namespace",
                 "-Pwork-directory=$WORK_DIR",
-                "-Pproject-prefix=$DEPLOYMENT_PREFIX"
+                "-Pproject-prefix=$DEPLOYMENT_PREFIX",
             )
             additionalEnvVariables = DEFAULT_ENV_VARIABLES
         }
@@ -215,7 +214,6 @@ class OcTemplatePluginTest {
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres-2")}")).exists()
         assertThat(projectPath.resolve("build/$WORK_DIR/logs/${getLogFileName("postgres-2")}").toFile()).isNotEmpty()
     }
-
 
     @Test
     fun testPodReadinessLogMessages() {
@@ -319,8 +317,5 @@ class OcTemplatePluginTest {
         assertThat(meta).contains("\"schemaVersion\":1")
     }
 
-    private fun getLogFileName(serviceName: String): String {
-        return "$DEPLOYMENT_PREFIX-1-0-snapshot-$serviceName.log"
-    }
-
+    private fun getLogFileName(serviceName: String): String = "$DEPLOYMENT_PREFIX-1-0-snapshot-$serviceName.log"
 }
