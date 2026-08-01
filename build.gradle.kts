@@ -20,6 +20,20 @@ group = "org.octopusden.octopus"
 description = "Octopus module for OC template gradle plugin"
 
 octopusQuality {
+    // Regression guard on what this repository publishes to Maven Central, from octopus-base
+    // v2.7.0. There is no prior hand-rolled guard here (that feature did not exist when this
+    // repo last touched octopusQuality), so this is a pure addition, not a replacement.
+    publication {
+        enforceCentralPublications.set(true)
+        centralPublications.set(
+            setOf(
+                ":|pluginMaven|org.octopusden.octopus:oc-template-gradle-plugin|" +
+                    "[jar, jar:javadoc, jar:sources]",
+                ":|OcTemplateGradlePluginPluginMarkerMaven|" +
+                    "org.octopusden.octopus.oc-template:org.octopusden.octopus.oc-template.gradle.plugin|[]",
+            ),
+        )
+    }
     // Repo has no jacoco/kover setup — keep coverage verification disabled.
     coverage {
         enabled.set(false)
