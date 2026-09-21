@@ -10,6 +10,7 @@ pluginManagement {
         id("io.gitlab.arturbosch.detekt") version settings.extra["detekt.version"] as String
         id("org.jlleitschuh.gradle.ktlint") version settings.extra["ktlint-gradle.version"] as String
         id("org.octopusden.octopus-quality") version settings.extra["octopus-quality.version"] as String
+        id("org.sonarqube") version settings.extra["sonarqube.version"] as String
     }
 }
 
