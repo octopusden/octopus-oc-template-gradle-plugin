@@ -4,7 +4,7 @@
   <CurrentIssues>
     <ID>ClassOrdering:OcTemplatePluginTest.kt$OcTemplatePluginTest$Companion</ID>
     <ID>ClassOrdering:PostMortemAnalyzer.kt$PostMortemAnalyzer$private val slurper = JsonSlurper()</ID>
-    <ID>CyclomaticComplexMethod:DiagnosticsCollector.kt$DiagnosticsCollector$private fun capturePodLimits()</ID>
+    <ID>CyclomaticComplexMethod:DiagnosticsCollector.kt$DiagnosticsCollector$private fun capturePodLimits(items: List&lt;*&gt;)</ID>
     <ID>CyclomaticComplexMethod:DiagnosticsCollector.kt$DiagnosticsCollector$private fun samplePods(ts: String)</ID>
     <ID>CyclomaticComplexMethod:PostMortemAnalyzer.kt$PostMortemAnalyzer$fun analyze(diagnosticsDir: File): String</ID>
     <ID>ImplicitDefaultLocale:DiagnosticsCollector.kt$DiagnosticsCollector.Companion$String.format("\\u%04x", c.code)</ID>

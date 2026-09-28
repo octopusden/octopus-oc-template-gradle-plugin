@@ -36,14 +36,17 @@ class DiagnosticsCollector(
 
     private val seenEvents = mutableSetOf<String>()
 
+    // One pod-limits row set per pod: the analyzer sums container limits per pod.
+    private val podsWithLimits = mutableSetOf<String>()
+
     init {
         diagnosticsDir.mkdirs()
     }
 
     fun writeBeforeSnapshot() {
         writeSnapshotInto(beforeDir)
-        // Capture pod resource limits once, so the analyzer can compute peak-vs-limit later.
-        capturePodLimits()
+        // Limits of pods already present; pods created later are added by samplePods on each tick.
+        fetchItems("pods", "pod-limits")?.let { capturePodLimits(it) }
     }
 
     fun writeAfterSnapshot() {
@@ -95,14 +98,14 @@ class DiagnosticsCollector(
         target.writeText(result.stdout)
     }
 
-    private fun capturePodLimits() {
-        val items = fetchItems("pods", "pod-limits") ?: return
+    private fun capturePodLimits(items: List<*>) {
         val sb = StringBuilder()
         for (item in items) {
             val obj = item as? Map<*, *> ?: continue
             val metadata = obj["metadata"] as? Map<*, *> ?: continue
             val pod = metadata["name"]?.toString() ?: continue
             val spec = obj["spec"] as? Map<*, *> ?: continue
+            if (!podsWithLimits.add(pod)) continue
             val node = spec["nodeName"]?.toString().orEmpty()
             val containers = spec["containers"] as? List<*> ?: continue
             for (c in containers) {
@@ -126,7 +129,7 @@ class DiagnosticsCollector(
                     .append("}\n")
             }
         }
-        podLimitsFile.writeText(sb.toString())
+        appendText(podLimitsFile, sb.toString())
     }
 
     private fun sampleMetrics(ts: String) {
@@ -158,6 +161,7 @@ class DiagnosticsCollector(
 
     private fun samplePods(ts: String) {
         val items = fetchItems("pods", "pods") ?: return
+        capturePodLimits(items)
         val sb = StringBuilder()
         for (item in items) {
             val obj = item as? Map<*, *> ?: continue

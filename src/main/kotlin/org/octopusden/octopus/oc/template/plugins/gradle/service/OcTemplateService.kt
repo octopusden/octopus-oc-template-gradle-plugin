@@ -139,12 +139,16 @@ abstract class OcTemplateService
             var counter = 0
             var consecutiveNoPodChecks = 0
             var seenAnyPod = false // Track if we've ever seen pods
+            var lastPollOk = false
 
             logger.info("Waiting for pod(s) with prefix '$deploymentPrefix-$serviceName' to be ready...")
 
             while (!ready && counter++ < attempts) {
                 Thread.sleep(period)
-                updateCreatedResources()
+                // A failed poll (API server timeout, network blip) is just a missed check: it
+                // costs one attempt and must not touch the no-pod early-exit counters.
+                lastPollOk = updateCreatedResources()
+                if (!lastPollOk) continue
                 startLogStreaming()
 
                 val checkResult = checkPodAvailability(consecutiveNoPodChecks, seenAnyPod, READINESS_CONTEXT_LABEL)
@@ -152,17 +156,17 @@ abstract class OcTemplateService
                 consecutiveNoPodChecks = checkResult.consecutiveNoPodChecks
                 seenAnyPod = checkResult.seenAnyPod // Update the flag
 
-                if (podResources.isEmpty()) continue
-
-                ready = areAllPodsReady()
-                if (ready) {
-                    logger.info(">> All pods are running and ready")
-                } else {
-                    logger.info(">> Pods not fully ready yet, waiting...")
+                if (podResources.isNotEmpty()) {
+                    ready = areAllPodsReady()
+                    if (ready) {
+                        logger.info(">> All pods are running and ready")
+                    } else {
+                        logger.info(">> Pods not fully ready yet, waiting...")
+                    }
                 }
             }
 
-            handleReadinessResult(ready)
+            handleReadinessResult(ready, lastPollOk)
         }
 
         private data class PodAvailabilityCheckResult(
@@ -230,6 +234,7 @@ abstract class OcTemplateService
                     podName,
                     "-n",
                     namespace,
+                    OC_REQUEST_TIMEOUT,
                     "-o",
                     "jsonpath='{.status.phase}:{.status.containerStatuses[*].ready}:{.status.containerStatuses[*].started}'",
                 )
@@ -262,9 +267,13 @@ abstract class OcTemplateService
             return PodStatus(phase, readyValues, startedValues)
         }
 
-        private fun handleReadinessResult(ready: Boolean) {
+        private fun handleReadinessResult(
+            ready: Boolean,
+            lastPollOk: Boolean,
+        ) {
             if (!ready) {
-                if (podResources.isEmpty()) {
+                // Empty names after a failed poll mean "unknown", not "podless service".
+                if (podResources.isEmpty() && lastPollOk) {
                     logger.info("No pods found for this service - skipping readiness check")
                     return
                 }
@@ -292,7 +301,7 @@ abstract class OcTemplateService
 
             while (counter++ < attempts) {
                 Thread.sleep(period)
-                updateCreatedResources()
+                if (!updateCreatedResources()) continue
                 startLogStreaming()
 
                 val checkResult = checkPodAvailability(consecutiveNoPodChecks, seenAnyPod, TERMINATION_CONTEXT_LABEL)
@@ -306,18 +315,18 @@ abstract class OcTemplateService
                     getPodStatus(name)?.phase?.let { lastSeenPhase[name] = it }
                 }
 
-                if (lastSeenPhase.isEmpty()) continue
-
-                val failed = lastSeenPhase.filterValues { it == "Failed" }.keys
-                if (failed.isNotEmpty()) {
-                    throw Exception("Pods finished with phase=Failed: $failed")
+                if (lastSeenPhase.isNotEmpty()) {
+                    val failed = lastSeenPhase.filterValues { it == "Failed" }.keys
+                    if (failed.isNotEmpty()) {
+                        throw Exception("Pods finished with phase=Failed: $failed")
+                    }
+                    val terminated = lastSeenPhase.values.all { it == "Succeeded" }
+                    if (terminated) {
+                        logger.info(">> All pods terminated with phase=Succeeded")
+                        return
+                    }
+                    logger.info(">> Pods not yet terminated, waiting...")
                 }
-                val terminated = lastSeenPhase.values.all { it == "Succeeded" }
-                if (terminated) {
-                    logger.info(">> All pods terminated with phase=Succeeded")
-                    return
-                }
-                logger.info(">> Pods not yet terminated, waiting...")
             }
             throw Exception("Pods termination wait attempts exceeded")
         }
@@ -455,11 +464,25 @@ abstract class OcTemplateService
             clearCreatedResources()
         }
 
-        private fun updateCreatedResources() {
+        /**
+         * Refreshes pod/route names. Returns false and keeps the previous names when `oc` fails,
+         * so a transient API error is reported to the caller instead of failing the build.
+         */
+        private fun updateCreatedResources(): Boolean {
             val output = ByteArrayOutputStream()
-            execOperations.exec {
-                it.setCommandLine("oc", "get", "pods,route", "-n", namespace, "-o", "name")
+            val errorOutput = ByteArrayOutputStream()
+            val result = execOperations.exec {
+                it.setCommandLine("oc", "get", "pods,route", "-n", namespace, OC_REQUEST_TIMEOUT, "-o", "name")
                 it.standardOutput = output
+                it.errorOutput = errorOutput
+                it.isIgnoreExitValue = true
+            }
+            if (result.exitValue != 0) {
+                logger.warn(
+                    ">> Failed to list pods/routes in '$namespace' (exit ${result.exitValue}), will retry: " +
+                        String(errorOutput.toByteArray()).trim(),
+                )
+                return false
             }
             val outputString = String(output.toByteArray())
 
@@ -471,6 +494,7 @@ abstract class OcTemplateService
                     line.startsWith("route/$deploymentPrefix-$serviceName") -> routeResources.add(line.removePrefix("route/"))
                 }
             }
+            return true
         }
 
         private fun clearCreatedResources() {
@@ -481,7 +505,13 @@ abstract class OcTemplateService
         override fun close() {
             stopLogStreaming()
             if (parameters.autoCleanup.getOrElse(true)) {
-                delete()
+                // End-of-build safety net: a failure here must not add a second error on top of
+                // the real one. Leftover pods are still bounded by the template's activeDeadlineSeconds.
+                try {
+                    delete()
+                } catch (e: Exception) {
+                    logger.warn("Cleanup of '$serviceName' resources failed, they may be left in '$namespace': ${e.message}")
+                }
             } else {
                 logger.info("Skipping cleanup of created resources (autoCleanup=false)")
             }
@@ -491,5 +521,9 @@ abstract class OcTemplateService
             private const val READINESS_CONTEXT_LABEL = "readiness check"
             private const val TERMINATION_CONTEXT_LABEL = "termination wait"
             private const val MAX_CONSECUTIVE_NO_POD_CHECKS = 3
+
+            // Fail a hung poll fast so the next attempt can retry, instead of blocking for the
+            // client default (observed: 2 min on an overloaded API server).
+            private const val OC_REQUEST_TIMEOUT = "--request-timeout=30s"
         }
     }

@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Namespace-scoped BuildService that runs whole-namespace resource diagnostics
- * during an FT run. Started by [OcCreateTask] (doFirst) and stopped by
+ * during an FT run. Started by [OcCreateTask] (start of its action) and stopped by
  * [OcLogsTask] or [OcDeleteTask] (whichever runs first). [close] is a final
  * safety net at build end.
  *

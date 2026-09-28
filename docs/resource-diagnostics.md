@@ -10,25 +10,25 @@ It's diagnostic, not preventative: the collector never throws out, never blocks 
 
 Three layers:
 
-1. **Lifecycle hooks** — `doFirst` on the existing `ocCreate` / `ocLogs` / `ocDelete` tasks. This covers both projects using `ocTemplate.isRequiredBy(ftTask)` and projects wiring `dependsOn(ocCreate) / finalizedBy(ocDelete)` manually, because every project goes through those tasks regardless.
+1. **Lifecycle hooks** — the start of the task action (`BaseOcTask.beforeServices()`) of the existing `ocCreate` / `ocLogs` / `ocDelete` tasks. This covers both projects using `ocTemplate.isRequiredBy(ftTask)` and projects wiring `dependsOn(ocCreate) / finalizedBy(ocDelete)` manually, because every project goes through those tasks regardless.
 2. **`OcDiagnosticsService`** — a Gradle `BuildService` keyed by namespace. Owns the daemon poller thread and idempotency (`AtomicBoolean` start/stop flags). One instance per distinct namespace per build.
 3. **`DiagnosticsCollector` + `PostMortemAnalyzer`** — the collector shells out to `oc` and writes files. The analyzer is a pure function over those files that produces `summary.txt`. Splitting them makes the analyzer trivially unit-testable with fixture files.
 
 ## Lifecycle
 
 ```
-ocCreate.doFirst   ──►  startCollection()                  (idempotent)
+ocCreate (start)   ──►  startCollection()                  (idempotent)
                          ├─ writeBeforeSnapshot()          (snapshot-before/*.json + pod-limits.jsonl)
                          └─ start daemon poller thread     (tick every diagnosticsPeriod)
 ocCreate (main)    ──►  oc create + waitReadiness          (collection window covers readiness wait)
 [FT task runs]
-ocLogs.doFirst     ──►  stopCollection()                   (idempotent)
+ocLogs (start)     ──►  stopCollection()                   (idempotent)
                          ├─ interrupt poller, join 5s
                          ├─ writeAfterSnapshot()           (snapshot-after/*.json)
                          ├─ writeMeta()                    (meta.json)
                          └─ PostMortemAnalyzer.analyzeAndWrite() (summary.txt)
 ocLogs (main)      ──►  final log snapshots
-ocDelete.doFirst   ──►  stopCollection()                   (no-op — already stopped)
+ocDelete (start)   ──►  stopCollection()                   (no-op — already stopped)
 ocDelete (main)    ──►  oc delete
 BuildService.close() ►  stopCollection()                   (no-op — safety net)
 ```
@@ -48,7 +48,7 @@ build/<workDir>/diagnostics/
     snapshot-after/                # same four files, taken at stop
     metrics.jsonl                  # oc adm top pods — per-tick
     pods.jsonl                     # pod phase + restart + last terminated reason/exit
-    pod-limits.jsonl               # one-shot: mem/cpu limits per container
+    pod-limits.jsonl               # mem/cpu limits per container, once per pod as it appears
     quota.jsonl                    # per-tick quota hard/used
     events.jsonl                   # deduped-by-uid, new events since last tick
     meta.json                      # project, namespace, gitSha, ftStartTs, ftEndTs, schemaVersion
@@ -137,7 +137,7 @@ Source: `oc get events` with jsonpath. Deduped by event UID so each event appear
 
 **What to look for:** `FailedScheduling` means no node had enough resources to place the pod. `Evicted` means Kubernetes evicted the pod to reclaim node resources.
 
-#### `pod-limits.jsonl` — memory/CPU limits per container (captured once)
+#### `pod-limits.jsonl` — memory/CPU limits per container (captured once per pod)
 
 ```json
 {"pod":"postgres-abc","container":"postgres","node":"worker-3","memLimit":"512Mi","cpuLimit":"1"}
@@ -151,7 +151,7 @@ Source: `oc get events` with jsonpath. Deduped by event UID so each event appear
 | `memLimit` | Maximum memory this container is allowed to use (e.g. `512Mi`). If exceeded, Kubernetes OOMKills it |
 | `cpuLimit` | Maximum CPU this container is allowed to use (e.g. `1` = 1 core, `500m` = 0.5 core). If exceeded, the container is throttled (not killed) |
 
-Source: `oc get pods` with jsonpath. Written once during `writeBeforeSnapshot`. (`DiagnosticsCollector.kt:118`)
+Source: `oc get pods -o json`. Written in `writeBeforeSnapshot` for pods already present, then appended on each tick for pods that appear later (one row set per pod). (`DiagnosticsCollector.kt:118`)
 
 **What to look for:** combine with `metrics.jsonl` to calculate peak usage as a percentage of the limit. A pod peaking at 90%+ of its memory limit is at risk of being OOMKilled. Note: CPU over-limit only causes throttling, but memory over-limit causes a kill.
 
@@ -396,9 +396,9 @@ Trust order:
 ## Key code references
 
 - Lifecycle hooks:
-  - `OcCreateTask` `doFirst` → `startCollection()` — `src/main/groovy/.../tasks/OcCreateTask.groovy`
-  - `OcLogsTask` `doFirst` → `stopCollection()` — `src/main/groovy/.../tasks/OcLogsTask.groovy`
-  - `OcDeleteTask` `doFirst` → `stopCollection()` — `src/main/groovy/.../tasks/OcDeleteTask.groovy`
+  - `OcCreateTask` `beforeServices()` → `startCollection()` — `src/main/groovy/.../tasks/OcCreateTask.groovy`
+  - `OcLogsTask` `beforeServices()` → `stopCollection()` — `src/main/groovy/.../tasks/OcLogsTask.groovy`
+  - `OcDeleteTask` `beforeServices()` → `stopCollection()` — `src/main/groovy/.../tasks/OcDeleteTask.groovy`
 - `OcDiagnosticsService.startCollection` — `src/main/kotlin/.../service/OcDiagnosticsService.kt:44`
 - `OcDiagnosticsService.stopCollection` — `OcDiagnosticsService.kt:88`
 - `OcDiagnosticsService.close` (safety net) — `OcDiagnosticsService.kt:110`
