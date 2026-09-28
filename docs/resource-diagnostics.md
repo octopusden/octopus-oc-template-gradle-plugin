@@ -48,7 +48,7 @@ build/<workDir>/diagnostics/
     snapshot-after/                # same four files, taken at stop
     metrics.jsonl                  # oc adm top pods — per-tick
     pods.jsonl                     # pod phase + restart + last terminated reason/exit
-    pod-limits.jsonl               # one-shot: mem/cpu limits per container
+    pod-limits.jsonl               # mem/cpu limits per container, once per pod as it appears
     quota.jsonl                    # per-tick quota hard/used
     events.jsonl                   # deduped-by-uid, new events since last tick
     meta.json                      # project, namespace, gitSha, ftStartTs, ftEndTs, schemaVersion
@@ -137,7 +137,7 @@ Source: `oc get events` with jsonpath. Deduped by event UID so each event appear
 
 **What to look for:** `FailedScheduling` means no node had enough resources to place the pod. `Evicted` means Kubernetes evicted the pod to reclaim node resources.
 
-#### `pod-limits.jsonl` — memory/CPU limits per container (captured once)
+#### `pod-limits.jsonl` — memory/CPU limits per container (captured once per pod)
 
 ```json
 {"pod":"postgres-abc","container":"postgres","node":"worker-3","memLimit":"512Mi","cpuLimit":"1"}
@@ -151,7 +151,7 @@ Source: `oc get events` with jsonpath. Deduped by event UID so each event appear
 | `memLimit` | Maximum memory this container is allowed to use (e.g. `512Mi`). If exceeded, Kubernetes OOMKills it |
 | `cpuLimit` | Maximum CPU this container is allowed to use (e.g. `1` = 1 core, `500m` = 0.5 core). If exceeded, the container is throttled (not killed) |
 
-Source: `oc get pods` with jsonpath. Written once during `writeBeforeSnapshot`. (`DiagnosticsCollector.kt:118`)
+Source: `oc get pods -o json`. Written in `writeBeforeSnapshot` for pods already present, then appended on each tick for pods that appear later (one row set per pod). (`DiagnosticsCollector.kt:118`)
 
 **What to look for:** combine with `metrics.jsonl` to calculate peak usage as a percentage of the limit. A pod peaking at 90%+ of its memory limit is at risk of being OOMKilled. Note: CPU over-limit only causes throttling, but memory over-limit causes a kill.
 

@@ -139,6 +139,7 @@ abstract class OcTemplateService
             var counter = 0
             var consecutiveNoPodChecks = 0
             var seenAnyPod = false // Track if we've ever seen pods
+            var lastPollOk = false
 
             logger.info("Waiting for pod(s) with prefix '$deploymentPrefix-$serviceName' to be ready...")
 
@@ -146,7 +147,8 @@ abstract class OcTemplateService
                 Thread.sleep(period)
                 // A failed poll (API server timeout, network blip) is just a missed check: it
                 // costs one attempt and must not touch the no-pod early-exit counters.
-                if (!updateCreatedResources()) continue
+                lastPollOk = updateCreatedResources()
+                if (!lastPollOk) continue
                 startLogStreaming()
 
                 val checkResult = checkPodAvailability(consecutiveNoPodChecks, seenAnyPod, READINESS_CONTEXT_LABEL)
@@ -164,7 +166,7 @@ abstract class OcTemplateService
                 }
             }
 
-            handleReadinessResult(ready)
+            handleReadinessResult(ready, lastPollOk)
         }
 
         private data class PodAvailabilityCheckResult(
@@ -265,9 +267,13 @@ abstract class OcTemplateService
             return PodStatus(phase, readyValues, startedValues)
         }
 
-        private fun handleReadinessResult(ready: Boolean) {
+        private fun handleReadinessResult(
+            ready: Boolean,
+            lastPollOk: Boolean,
+        ) {
             if (!ready) {
-                if (podResources.isEmpty()) {
+                // Empty names after a failed poll mean "unknown", not "podless service".
+                if (podResources.isEmpty() && lastPollOk) {
                     logger.info("No pods found for this service - skipping readiness check")
                     return
                 }
