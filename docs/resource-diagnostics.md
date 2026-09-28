@@ -10,25 +10,25 @@ It's diagnostic, not preventative: the collector never throws out, never blocks 
 
 Three layers:
 
-1. **Lifecycle hooks** — `doFirst` on the existing `ocCreate` / `ocLogs` / `ocDelete` tasks. This covers both projects using `ocTemplate.isRequiredBy(ftTask)` and projects wiring `dependsOn(ocCreate) / finalizedBy(ocDelete)` manually, because every project goes through those tasks regardless.
+1. **Lifecycle hooks** — the start of the task action (`BaseOcTask.beforeServices()`) of the existing `ocCreate` / `ocLogs` / `ocDelete` tasks. This covers both projects using `ocTemplate.isRequiredBy(ftTask)` and projects wiring `dependsOn(ocCreate) / finalizedBy(ocDelete)` manually, because every project goes through those tasks regardless.
 2. **`OcDiagnosticsService`** — a Gradle `BuildService` keyed by namespace. Owns the daemon poller thread and idempotency (`AtomicBoolean` start/stop flags). One instance per distinct namespace per build.
 3. **`DiagnosticsCollector` + `PostMortemAnalyzer`** — the collector shells out to `oc` and writes files. The analyzer is a pure function over those files that produces `summary.txt`. Splitting them makes the analyzer trivially unit-testable with fixture files.
 
 ## Lifecycle
 
 ```
-ocCreate.doFirst   ──►  startCollection()                  (idempotent)
+ocCreate (start)   ──►  startCollection()                  (idempotent)
                          ├─ writeBeforeSnapshot()          (snapshot-before/*.json + pod-limits.jsonl)
                          └─ start daemon poller thread     (tick every diagnosticsPeriod)
 ocCreate (main)    ──►  oc create + waitReadiness          (collection window covers readiness wait)
 [FT task runs]
-ocLogs.doFirst     ──►  stopCollection()                   (idempotent)
+ocLogs (start)     ──►  stopCollection()                   (idempotent)
                          ├─ interrupt poller, join 5s
                          ├─ writeAfterSnapshot()           (snapshot-after/*.json)
                          ├─ writeMeta()                    (meta.json)
                          └─ PostMortemAnalyzer.analyzeAndWrite() (summary.txt)
 ocLogs (main)      ──►  final log snapshots
-ocDelete.doFirst   ──►  stopCollection()                   (no-op — already stopped)
+ocDelete (start)   ──►  stopCollection()                   (no-op — already stopped)
 ocDelete (main)    ──►  oc delete
 BuildService.close() ►  stopCollection()                   (no-op — safety net)
 ```
@@ -396,9 +396,9 @@ Trust order:
 ## Key code references
 
 - Lifecycle hooks:
-  - `OcCreateTask` `doFirst` → `startCollection()` — `src/main/groovy/.../tasks/OcCreateTask.groovy`
-  - `OcLogsTask` `doFirst` → `stopCollection()` — `src/main/groovy/.../tasks/OcLogsTask.groovy`
-  - `OcDeleteTask` `doFirst` → `stopCollection()` — `src/main/groovy/.../tasks/OcDeleteTask.groovy`
+  - `OcCreateTask` `beforeServices()` → `startCollection()` — `src/main/groovy/.../tasks/OcCreateTask.groovy`
+  - `OcLogsTask` `beforeServices()` → `stopCollection()` — `src/main/groovy/.../tasks/OcLogsTask.groovy`
+  - `OcDeleteTask` `beforeServices()` → `stopCollection()` — `src/main/groovy/.../tasks/OcDeleteTask.groovy`
 - `OcDiagnosticsService.startCollection` — `src/main/kotlin/.../service/OcDiagnosticsService.kt:44`
 - `OcDiagnosticsService.stopCollection` — `OcDiagnosticsService.kt:88`
 - `OcDiagnosticsService.close` (safety net) — `OcDiagnosticsService.kt:110`

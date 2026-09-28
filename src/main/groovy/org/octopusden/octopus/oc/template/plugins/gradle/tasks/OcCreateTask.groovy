@@ -10,7 +10,11 @@ abstract class OcCreateTask extends BaseOcTask {
     @Inject
     OcCreateTask() {
         super("Creates resources from processed templates for all services")
-        startDiagnosticsBeforeAction()
+    }
+
+    @Override
+    protected void beforeServices() {
+        startDiagnostics()
     }
 
     @Override
