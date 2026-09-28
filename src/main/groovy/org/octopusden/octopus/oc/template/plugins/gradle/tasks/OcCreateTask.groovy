@@ -14,7 +14,7 @@ abstract class OcCreateTask extends BaseOcTask {
 
     @Override
     protected void beforeServices() {
-        startDiagnostics()
+        switchDiagnostics(true)
     }
 
     @Override

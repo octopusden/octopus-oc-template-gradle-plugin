@@ -14,7 +14,7 @@ abstract class OcLogsTask extends BaseOcTask {
 
     @Override
     protected void beforeServices() {
-        stopDiagnostics()
+        switchDiagnostics(false)
     }
 
     @Override

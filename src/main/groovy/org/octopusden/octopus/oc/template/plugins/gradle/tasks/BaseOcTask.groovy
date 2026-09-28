@@ -33,22 +33,12 @@ abstract class BaseOcTask extends DefaultTask {
         description = descriptionText
     }
 
-    protected void startDiagnostics() {
+    protected void switchDiagnostics(boolean on) {
         if (diagnosticsEnabled.getOrElse(true) && diagnosticsService.isPresent()) {
             try {
-                diagnosticsService.get().startCollection()
+                on ? diagnosticsService.get().startCollection() : diagnosticsService.get().stopCollection()
             } catch (Throwable t) {
-                logger.warn("Failed to start OKD diagnostics: ${t.message}")
-            }
-        }
-    }
-
-    protected void stopDiagnostics() {
-        if (diagnosticsEnabled.getOrElse(true) && diagnosticsService.isPresent()) {
-            try {
-                diagnosticsService.get().stopCollection()
-            } catch (Throwable t) {
-                logger.warn("Failed to stop OKD diagnostics: ${t.message}")
+                logger.warn("Failed to ${on ? 'start' : 'stop'} OKD diagnostics: ${t.message}")
             }
         }
     }

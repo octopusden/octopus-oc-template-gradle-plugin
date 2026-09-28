@@ -14,7 +14,7 @@ class OcDeleteTask extends BaseOcTask {
 
     @Override
     protected void beforeServices() {
-        stopDiagnostics()
+        switchDiagnostics(false)
     }
 
     @Override
