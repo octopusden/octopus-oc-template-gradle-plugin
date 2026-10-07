@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import java.time.Duration
@@ -58,6 +59,8 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:${project.extra["junit-jupiter.version"]}"))
     testImplementation("org.junit.jupiter:junit-jupiter-engine")
     testImplementation("org.junit.jupiter:junit-jupiter-params")
+    // Gradle no longer puts the JUnit Platform launcher on the test runtime classpath itself.
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.named<GroovyCompile>("compileGroovy") {
@@ -69,13 +72,31 @@ tasks.withType<KotlinJvmCompile>().configureEach {
     compilerOptions {
         suppressWarnings = true
         jvmTarget = JvmTarget.JVM_1_8
+        // The Kotlin Gradle plugin (kotlin-plugin.version) is newer than the Kotlin runtime this
+        // plugin ships with (kotlin.version). Hold the compiler to the runtime's level so the
+        // metadata stays what consumers can read and no call reaches a newer stdlib API.
+        languageVersion = KotlinVersion.KOTLIN_2_1
+        apiVersion = KotlinVersion.KOTLIN_2_1
     }
+}
+
+kotlin {
+    // Version the plugin gives kotlin-stdlib; it defaults to the plugin's version, which would
+    // leak into the published POM/module.
+    coreLibrariesVersion = project.extra["kotlin.version"] as String
 }
 
 java {
     withSourcesJar()
     withJavadocJar()
     targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+// On Gradle 9, java-gradle-plugin turns stricter validation on for a plugin project that applies a
+// publishing plugin (maven-publish here), which also requires every task type to declare why it is not
+// cacheable. Keep the validation that Gradle 8 ran, so the published plugin classes stay as they are.
+tasks.validatePlugins {
+    enableStricterValidation.set(false)
 }
 
 gradlePlugin {

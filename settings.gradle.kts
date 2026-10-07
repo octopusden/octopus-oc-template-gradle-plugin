@@ -4,7 +4,7 @@ pluginManagement {
         mavenCentral()
     }
     plugins {
-        kotlin("jvm") version settings.extra["kotlin.version"] as String
+        kotlin("jvm") version settings.extra["kotlin-plugin.version"] as String
         id("io.github.gradle-nexus.publish-plugin") version settings.extra["nexus-plugin.version"] as String
         id("com.jfrog.artifactory") version settings.extra["com-jfrog-artifactory.version"] as String
         id("io.gitlab.arturbosch.detekt") version settings.extra["detekt.version"] as String
