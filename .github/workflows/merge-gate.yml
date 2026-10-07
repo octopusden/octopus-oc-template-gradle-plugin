@@ -13,14 +13,14 @@ jobs:
   build:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v3.2.0
     with:
-      java-version: '11'
+      java-version: '17'
       flow-type: hybrid
     secrets: inherit
 
   quality:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v3.2.0
     with:
-      java-version: '11'
+      java-version: '17'
       # Repo tests require an OKD/Docker cluster (OKD_PROJECT, DOCKER_REGISTRY, ...) that
       # is unavailable on CI runners; exclude the infra-bound `test` task from the gate.
       coverage-command: ./gradlew qualityCoverage -x test --no-daemon --stacktrace
@@ -29,7 +29,7 @@ jobs:
   security:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v3.2.0
     with:
-      java-version: '11'
+      java-version: '17'
     secrets: inherit
 
   workflow-lint:
